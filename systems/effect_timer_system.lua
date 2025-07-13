@@ -6,12 +6,6 @@ local EffectTimerSystem = {}
 function EffectTimerSystem.update(dt, world)
     -- 1. Update timers on entity components
     for _, s in ipairs(world.all_entities) do
-        -- Update flash timer
-        if s.components.flash then
-            s.components.flash.timer = s.components.flash.timer - dt
-            if s.components.flash.timer <= 0 then s.components.flash = nil end
-        end
-
         -- Update shake timer
         if s.components.shake then
             s.components.shake.timer = s.components.shake.timer - dt
@@ -73,15 +67,6 @@ function EffectTimerSystem.update(dt, world)
             if effect.currentFlashTimer <= 0 then
                 table.remove(world.attackEffects, i)
             end
-        end
-    end
-
-    -- Grapple Line Effects
-    for i = #world.grappleLineEffects, 1, -1 do
-        local effect = world.grappleLineEffects[i]
-        effect.lifetime = effect.lifetime - dt
-        if effect.lifetime <= 0 then
-            table.remove(world.grappleLineEffects, i)
         end
     end
 end

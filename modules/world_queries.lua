@@ -40,12 +40,17 @@ function WorldQueries.isTargetInPattern(attacker, patternFunc, targets, world)
         local s = effectData.shape
 
         if s.type == "rect" then
+            -- Convert the pixel-based rectangle into tile boundaries.
+            local startTileX, startTileY = Grid.toTile(s.x, s.y)
+            -- Important: The end tile is the one containing the bottom-right corner pixel.
+            local endTileX, endTileY = Grid.toTile(s.x + s.w - 1, s.y + s.h - 1)
+
             for _, target in ipairs(targets) do
+                -- We only care about living targets. The `target.hp == nil` check is for the flag.
                 if target and (target.hp == nil or target.hp > 0) then
-                    local targetCenterX = target.x + target.size / 2
-                    local targetCenterY = target.y + target.size / 2
-                    if targetCenterX >= s.x and targetCenterX < s.x + s.w and
-                       targetCenterY >= s.y and targetCenterY < s.y + s.h then
+                    -- Check if the target's single tile falls within the pattern's tile-based AABB.
+                    if target.tileX >= startTileX and target.tileX <= endTileX and
+                       target.tileY >= startTileY and target.tileY <= endTileY then
                         return true -- Found a target within one of the pattern's shapes
                     end
                 end

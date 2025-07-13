@@ -19,19 +19,16 @@ local ProjectileSystem = require("systems.projectile_system")
 local MovementSystem = require("systems/movement_system")
 local EnemyTurnSystem = require("systems.enemy_turn_system")
 local TurnBasedMovementSystem = require("systems/turn_based_movement_system")
-local PlayerSwitchSystem = require("systems.player_switch_system")
 local PassiveSystem = require("systems.passive_system")
-local TeamStatusSystem = require("systems.team_status_system")
 local AttackResolutionSystem = require("systems.attack_resolution_system")
-local DashSystem = require("systems.dash_system")
 local GrappleHookSystem = require("systems/grapple_hook_system")
 local PidgeotSystem = require("systems/pidgeot_system")
 local DeathSystem = require("systems.death_system")
-local Renderer = require("modules.renderer")
-local CombatActions = require("modules.combat_actions")
-local EventBus = require("modules.event_bus")
-local Camera = require("modules.camera")
-local InputHandler = require("modules.input_handler")
+local Renderer = require("modules/renderer")
+local CombatActions = require("modules/combat_actions")
+local EventBus = require("modules/event_bus")
+local Camera = require("modules/camera")
+local InputHandler = require("modules/input_handler")
 
 world = nil -- Will be initialized in love.load after assets are loaded
 GameFont = nil -- Will hold our loaded font
@@ -47,7 +44,6 @@ local update_systems = {
     StatSystem,
     EffectTimerSystem,
     PassiveSystem,
-    PlayerSwitchSystem,
     -- 2. Movement and Animation (update physical state)
     TurnBasedMovementSystem,
     MovementSystem,
@@ -57,7 +53,6 @@ local update_systems = {
     -- 4. Update ongoing effects of actions
     ProjectileSystem,
     GrappleHookSystem,
-    DashSystem,
     PidgeotSystem,
     CareeningSystem,
     -- 5. Resolve the consequences of actions

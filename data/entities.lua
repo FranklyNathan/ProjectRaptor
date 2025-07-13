@@ -99,11 +99,6 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
     -- A scalable way to handle status effects
     square.statusEffects = {}
 
-    -- Add an AI component to players
-    if square.type == "player" then
-        square.components.ai = { behavior = "player_ally", last_attack_key = nil, move_timer = 0, path = {} }
-    end
-
     -- Add an AI component to enemies
     if square.type == "enemy" then
         square.components.ai = {}

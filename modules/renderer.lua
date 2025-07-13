@@ -107,7 +107,14 @@ local function draw_entity(entity, world, is_active_player)
             currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
         end
 
-        -- Step 3.7: If the unit has acted, draw a greyscale version on top of the sprite and its status effects.
+        -- Step 3.5: If stunned, draw a static purple overlay.
+        if entity.statusEffects.stunned and Assets.shaders.solid_color then
+            love.graphics.setShader(Assets.shaders.solid_color)
+            Assets.shaders.solid_color:send("solid_color", {0.5, 0, 0.5, 0.5}) -- Semi-transparent purple
+            currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
+        end
+
+        -- Step 3.7: If the unit has acted, draw a greyscale version on top of everything else.
         -- This ensures the "acted" state is always visible.
         if entity.hasActed and Assets.shaders.greyscale then
             love.graphics.setShader(Assets.shaders.greyscale)
@@ -131,37 +138,7 @@ local function draw_entity(entity, world, is_active_player)
         love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
     end
 
-    -- Draw status effect overlays
-    if entity.statusEffects.stunned then
-        love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
-        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
-    elseif entity.statusEffects.paralyzed and not entity.components.animation then
-        love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
-        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
-    elseif entity.statusEffects.poison and not entity.components.animation then
-        -- Pulsating purple tint for poison
-        local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
-        local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
-        love.graphics.setColor(0.6, 0.2, 0.8, alpha) -- Purple
-        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
-    end
-
-    -- Special drawing logic for specific entity types
-    -- This block is now empty as all enemies have sprites. It can be removed or kept for future non-sprite enemies.
-
     drawHealthBar(entity)
-
-    -- Draw flash effect if active and flashing (only for players)
-    if entity.type == "player" and entity.components.flash then
-        local flash = entity.components.flash
-        local alpha = flash.timer / Config.FLASH_DURATION -- Fade out effect
-        love.graphics.setColor(1, 1, 1, alpha) -- White flash
-        local flashX = entity.x - Config.SQUARE_SIZE
-        local flashY = entity.y - Config.SQUARE_SIZE
-        local flashWidth = entity.size * 3
-        local flashHeight = entity.size * 3
-        love.graphics.rectangle("fill", flashX, flashY, flashWidth, flashHeight)
-    end
 
     -- If this is the active player, draw a white border around it
     -- This now only applies to entities WITHOUT a sprite, as sprites get their own outline.
@@ -411,36 +388,6 @@ function Renderer.draw_frame(world)
         local alpha = (p.lifetime / p.initialLifetime)
         love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
         love.graphics.print(p.text, p.x, p.y)
-    end
-
-    -- Draw player switch "comet" effect
-    for _, effect in ipairs(world.switchPlayerEffects) do
-        -- Draw trail
-        for _, p in ipairs(effect.trail) do
-            local alpha = p.lifetime / p.initialLifetime
-            love.graphics.setColor(1, 1, 1, alpha * 0.8)
-            love.graphics.circle("fill", p.x, p.y, 4)
-        end
-
-        -- Draw head
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.circle("fill", effect.currentX, effect.currentY, 6)
-    end
-
-    -- Draw grapple lines
-    if #world.grappleLineEffects > 0 then
-        love.graphics.setColor(0.6, 0.3, 0.1, 1) -- Brown color for the grapple line
-        love.graphics.setLineWidth(2)
-        for _, effect in ipairs(world.grappleLineEffects) do
-            if effect.attacker and effect.target then
-                local x1 = effect.attacker.x + effect.attacker.size / 2
-                local y1 = effect.attacker.y + effect.attacker.size / 2
-                local x2 = effect.target.x + effect.target.size / 2
-                local y2 = effect.target.y + effect.target.size / 2
-                love.graphics.line(x1, y1, x2, y2)
-            end
-        end
-        love.graphics.setLineWidth(1) -- Reset line width
     end
 
     -- Draw new grappling hooks and their lines

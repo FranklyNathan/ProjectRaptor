@@ -23,31 +23,65 @@ local function findClosestPlayer(enemy, world)
     return closestPlayer
 end
 
--- Finds the best tile in a unit's range from which to attack a target.
+-- Finds the best tile in a unit's range from which to attack a target using a directional pattern.
 local function findBestAttackPosition(enemy, target, patternFunc, reachableTiles, world)
     if not patternFunc then return nil end
-
+    
+    local bestPosKey, closestDistSq = nil, math.huge
     -- Create a temporary enemy object to test positions without modifying the real one.
     -- It needs both tile and pixel coordinates for the pattern functions to work correctly.
     local tempEnemy = { tileX = 0, tileY = 0, x = 0, y = 0, size = enemy.size, lastDirection = "down" }
-
+    
     for posKey, _ in pairs(reachableTiles) do
         local tileX = tonumber(string.match(posKey, "(-?%d+)"))
         local tileY = tonumber(string.match(posKey, ",(-?%d+)"))
         tempEnemy.tileX, tempEnemy.tileY = tileX, tileY
         tempEnemy.x, tempEnemy.y = Grid.toPixels(tileX, tileY)
-
+        
         -- Make the temporary unit face the target from its potential new spot.
         local dx, dy = target.tileX - tempEnemy.tileX, target.tileY - tempEnemy.tileY
         if math.abs(dx) > math.abs(dy) then tempEnemy.lastDirection = (dx > 0) and "right" or "left"
         else tempEnemy.lastDirection = (dy > 0) and "down" or "up" end
-
+        
         -- Check if the target is in the attack pattern from this new position.
         if WorldQueries.isTargetInPattern(tempEnemy, patternFunc, {target}, world) then
-            return posKey -- For now, we return the first valid spot we find.
+            -- This is a valid attack spot. Is it the best one so far (closest to target)?
+            local distSq = (tileX - target.tileX)^2 + (tileY - target.tileY)^2
+            if distSq < closestDistSq then
+                closestDistSq = distSq
+                bestPosKey = posKey
+            end
         end
     end
-    return nil -- No suitable attack position found.
+    return bestPosKey -- Return the best spot found, or nil.
+end
+
+-- Finds the best tile in a unit's range from which to use a cycle_target attack on a target.
+local function findBestCycleTargetAttackPosition(enemy, target, attackName, reachableTiles, world)
+    local bestPosKey, closestDistSq = nil, math.huge
+    -- Create a temporary copy of the enemy to test positions without modifying the real one.
+    local tempEnemy = {}
+    for k, v in pairs(enemy) do tempEnemy[k] = v end
+    
+    for posKey, _ in pairs(reachableTiles) do
+        local tileX = tonumber(string.match(posKey, "(-?%d+)"))
+        local tileY = tonumber(string.match(posKey, ",(-?%d+)"))
+        tempEnemy.tileX, tempEnemy.tileY = tileX, tileY
+        
+        local validTargets = WorldQueries.findValidTargetsForAttack(tempEnemy, attackName, world)
+        for _, validTarget in ipairs(validTargets) do
+            if validTarget == target then
+                -- This is a valid attack spot. Is it the best one so far (closest to target)?
+                local distSq = (tileX - target.tileX)^2 + (tileY - target.tileY)^2
+                if distSq < closestDistSq then
+                    closestDistSq = distSq
+                    bestPosKey = posKey
+                end
+                break -- Found a valid spot for this tile, no need to check other targets from this same tile.
+            end
+        end
+    end
+    return bestPosKey
 end
 
 -- Finds the reachable tile that is closest to the target.
@@ -67,14 +101,8 @@ end
 function EnemyTurnSystem.update(dt, world)
     if world.turn ~= "enemy" then return end
 
-    -- If any unit is currently moving, wait for it to finish before processing the next one.
-    for _, entity in ipairs(world.all_entities) do
-        if entity.components.movement_path then
-            return
-        end
-    end
-
-    -- If any attack animation is playing, wait for it to finish before processing the next unit.
+    -- If any unit is currently moving or an attack is resolving, wait.
+    for _, entity in ipairs(world.all_entities) do if entity.components.movement_path then return end end
     if #world.attackEffects > 0 then
         return
     end
@@ -98,42 +126,62 @@ function EnemyTurnSystem.update(dt, world)
         if not attackName then actingEnemy.hasActed = true; return end
         local attackData = AttackBlueprints[attackName]
         if not attackData then actingEnemy.hasActed = true; return end
-        local patternFunc = AttackPatterns[attackName]
 
-        -- 2. Check if the enemy can attack from its current position.
-        if patternFunc and WorldQueries.isTargetInPattern(actingEnemy, patternFunc, {targetPlayer}, world) then
-            UnitAttacks[attackName](actingEnemy, attackData.power, world)
-            actingEnemy.hasActed = true -- Mark as acted
-            return
+        -- 2. Determine if an attack is possible and from where.
+        local canAttackNow = false
+        local bestAttackPosKey = nil
+        local reachableTiles, came_from = Pathfinding.calculateReachableTiles(actingEnemy, world)
+
+        if attackData.targeting_style == "cycle_target" then
+            -- Check if we can attack from the current position.
+            local currentTargets = WorldQueries.findValidTargetsForAttack(actingEnemy, attackName, world)
+            for _, t in ipairs(currentTargets) do if t == targetPlayer then canAttackNow = true; break end end
+
+            -- If not, find a better position.
+            if not canAttackNow then
+                bestAttackPosKey = findBestCycleTargetAttackPosition(actingEnemy, targetPlayer, attackName, reachableTiles, world)
+            end
+
+        elseif attackData.targeting_style == "directional_aim" then
+            local patternFunc = AttackPatterns[attackName]
+            if patternFunc and WorldQueries.isTargetInPattern(actingEnemy, patternFunc, {targetPlayer}, world) then
+                canAttackNow = true
+            else
+                bestAttackPosKey = findBestAttackPosition(actingEnemy, targetPlayer, patternFunc, reachableTiles, world)
+            end
         end
 
-        -- 3. If not, find a tile to move to.
-        local reachableTiles, came_from = Pathfinding.calculateReachableTiles(actingEnemy, world)
-        local bestAttackPosKey = findBestAttackPosition(actingEnemy, targetPlayer, patternFunc, reachableTiles, world)
+        -- 3. Execute the chosen action.
+        if canAttackNow then
+            -- Attack from current position.
+            if attackData.targeting_style == "cycle_target" then
+                -- The AI needs to "select" its target for the attack function to work.
+                world.cycleTargeting.active = true
+                world.cycleTargeting.targets = {targetPlayer}
+                world.cycleTargeting.selectedIndex = 1
+            end
+            UnitAttacks[attackName](actingEnemy, attackData.power, world)
+            world.cycleTargeting.active = false -- Clean up
+            actingEnemy.hasActed = true
+            return
 
-        if bestAttackPosKey then
-            -- Found a spot to move to and then attack. Set the path and let the
-            -- movement system handle it. By not setting 'hasActed', the AI will
-            -- run again for this unit after it moves, allowing it to attack.
+        elseif bestAttackPosKey then
+            -- Move to the best attack position. The AI will attack on its next update after moving.
             local startKey = actingEnemy.tileX .. "," .. actingEnemy.tileY
             local path = Pathfinding.reconstructPath(came_from, startKey, bestAttackPosKey)
-            if path and #path > 0 then
-                actingEnemy.components.movement_path = path
-                return -- Don't mark as acted, allow attack after move.
-            end
+            if path and #path > 0 then actingEnemy.components.movement_path = path; return end
+
         else
-            -- Cannot get in range to attack, so just move closer. This will consume the turn.
+            -- Cannot attack, so just move closer. This consumes the turn.
             local moveOnlyDestinationKey = findClosestReachableTile(actingEnemy, targetPlayer, reachableTiles)
             if moveOnlyDestinationKey then
                 local startKey = actingEnemy.tileX .. "," .. actingEnemy.tileY
                 local path = Pathfinding.reconstructPath(came_from, startKey, moveOnlyDestinationKey)
-                if path and #path > 0 then
-                    actingEnemy.components.movement_path = path
-                end
+                if path and #path > 0 then actingEnemy.components.movement_path = path end
             end
         end
 
-        -- After making a decision (or failing to), the enemy's thinking phase for this turn is over.
+        -- After moving (or failing to), the enemy's turn is over.
         actingEnemy.hasActed = true
     else
         -- No more enemies to act, which means the enemy turn is over.

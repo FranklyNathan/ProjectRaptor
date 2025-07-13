@@ -37,19 +37,42 @@ function RangeCalculator.calculateAttackableTiles(unit, world)
 
         -- ...check every attack it has...
         for _, attackName in ipairs(blueprint.attacks) do
-            local patternFunc = AttackPatterns[attackName]
-            if patternFunc then
-                -- ...in every possible direction.
-                for _, dir in ipairs(directions) do
-                    tempUnit.lastDirection = dir
-                    local attackShapes = patternFunc(tempUnit, world)
-
-                    -- Convert the shapes' pixel coordinates back to tiles and add to the set.
-                    for _, effectData in ipairs(attackShapes) do
-                        local s = effectData.shape
-                        local startTileX, startTileY = Grid.toTile(s.x, s.y)
-                        local endTileX, endTileY = Grid.toTile(s.x + s.w - 1, s.y + s.h - 1)
-                        for ty = startTileY, endTileY do for tx = startTileX, endTileX do attackableTiles[tx .. "," .. ty] = true end end
+            local attackData = AttackBlueprints[attackName]
+            if attackData then
+                if attackData.targeting_style == "cycle_target" then
+                    -- Handle cycle_target attacks (like slash) by calculating their Manhattan distance range.
+                    local range = attackData.range
+                    local minRange = attackData.min_range or 1
+                    if range then
+                        -- From the current reachable tile (tileX, tileY), find all tiles within attack range.
+                        for dx = -range, range do
+                            for dy = -range, range do
+                                local manhattanDist = math.abs(dx) + math.abs(dy)
+                                if manhattanDist >= minRange and manhattanDist <= range then
+                                    local attackTileX, attackTileY = tileX + dx, tileY + dy
+                                    -- Check map bounds before adding.
+                                    if attackTileX >= 0 and attackTileX < Config.MAP_WIDTH_TILES and attackTileY >= 0 and attackTileY < Config.MAP_HEIGHT_TILES then
+                                        attackableTiles[attackTileX .. "," .. attackTileY] = true
+                                    end
+                                end
+                            end
+                        end
+                    end
+                else -- Handle directional patterns
+                    local patternFunc = AttackPatterns[attackName]
+                    if patternFunc then
+                        -- ...in every possible direction.
+                        for _, dir in ipairs(directions) do
+                            tempUnit.lastDirection = dir
+                            local attackShapes = patternFunc(tempUnit, world)
+                            -- Convert the shapes' pixel coordinates back to tiles and add to the set.
+                            for _, effectData in ipairs(attackShapes) do
+                                local s = effectData.shape
+                                local startTileX, startTileY = Grid.toTile(s.x, s.y)
+                                local endTileX, endTileY = Grid.toTile(s.x + s.w - 1, s.y + s.h - 1)
+                                for ty = startTileY, endTileY do for tx = startTileX, endTileX do attackableTiles[tx .. "," .. ty] = true end end
+                            end
+                        end
                     end
                 end
             end

@@ -5,7 +5,6 @@ local Config = {
     SQUARE_SIZE = 32,
     SLIDE_SPEED = 200,
     FLASH_DURATION = 0.2,
-    ATTACK_COOLDOWN_GLOBAL = 0.1,
     BASE_CRIT_CHANCE = 0.05,
     POISON_DAMAGE_PER_TURN = 10,
     -- The size of the visible game area in pixels (24x18 tiles)

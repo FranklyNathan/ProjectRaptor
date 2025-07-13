@@ -3,7 +3,6 @@
 
 local EffectFactory = require("modules.effect_factory")
 local WorldQueries = require("modules.world_queries")
-local Navigation = require("modules.navigation")
 local CombatActions = require("modules.combat_actions")
 local AttackPatterns = require("modules.attack_patterns")
 local Grid = require("modules.grid")
@@ -84,9 +83,25 @@ UnitAttacks.viscous_strike = function(square, power, world)
     executePatternAttack(square, power, AttackPatterns.viscous_strike, false, nil, status)
 end
 
-UnitAttacks.venom_stab = function(square, power, world)
+UnitAttacks.venom_stab = function(attacker, power, world)
+    -- 1. Get the selected target from the cycle targeting system.
+    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
+        return false -- Failsafe
+    end
+    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
+
+    -- 2. Make the attacker face the target.
+    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
+    if math.abs(dx) > math.abs(dy) then
+        attacker.lastDirection = (dx > 0) and "right" or "left"
+    else
+        attacker.lastDirection = (dy > 0) and "down" or "up"
+    end
+
+    -- 3. Execute the attack on the target's tile with a poison status effect.
     local status = {type = "poison", duration = 3} -- Lasts 3 turns
-    executePatternAttack(square, power, AttackPatterns.venom_stab, false, nil, status)
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, "enemy", nil, status)
+    return true
 end
 
 UnitAttacks.phantom_step = function(square, power, world)
@@ -125,35 +140,30 @@ UnitAttacks.mend = function(square, power, world)
     executePatternAttack(square, power, AttackPatterns.viscous_strike, true, "player", nil, {cleansesPoison = true})
 end
 
-UnitAttacks.invigorating_aura = function(square, power, world)
-    -- This ability targets the tile directly in front of Florges.
-    -- We can use the simple_melee pattern to find this tile.
-    local pattern = AttackPatterns.simple_melee(square)
-    if not pattern or #pattern == 0 then return true end -- Failsafe, consumes turn
+UnitAttacks.invigorating_aura = function(attacker, power, world)
+    -- 1. Get the selected target from the cycle targeting system.
+    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
+        return false -- Failsafe
+    end
+    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
 
-    local targetShape = pattern[1].shape
-    local targetPixelX, targetPixelY = targetShape.x, targetShape.y
-
-    -- Create a visual effect on the target tile so the player sees the action.
-    EffectFactory.addAttackEffect(targetPixelX, targetPixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE, {0.5, 1, 0.5, 0.7}, 0, square, 0, true, "none")
-
-    -- Check if a friendly unit is on the target tile.
-    local targetTileX, targetTileY = Grid.toTile(targetPixelX, targetPixelY)
-    local targetUnit = nil
-    for _, p in ipairs(world.players) do
-        if p.tileX == targetTileX and p.tileY == targetTileY and p.hp > 0 then
-            targetUnit = p
-            break
-        end
+    -- 2. Make the attacker face the target.
+    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
+    if math.abs(dx) > math.abs(dy) then
+        attacker.lastDirection = (dx > 0) and "right" or "left"
+    else
+        attacker.lastDirection = (dy > 0) and "down" or "up"
     end
 
-    -- If a friendly unit who has already acted is found, refresh their turn.
-    if targetUnit and targetUnit.hasActed then
-        targetUnit.hasActed = false
-        EffectFactory.createDamagePopup(targetUnit, "Refreshed!", false, {0.5, 1, 0.5, 1}) -- Green text
+    -- 3. If the friendly target has already acted, refresh their turn.
+    if target.hasActed then
+        target.hasActed = false
+        EffectFactory.createDamagePopup(target, "Refreshed!", false, {0.5, 1, 0.5, 1}) -- Green text
     end
 
-    return true -- Always consume the turn, even if no target is hit.
+    -- 4. Create a visual effect on the target tile so the player sees the action.
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {0.5, 1, 0.5, 0.7}, 0, attacker, 0, true, "none")
+    return true
 end
 
 UnitAttacks.eruption = function(attacker, power, world)
@@ -196,16 +206,37 @@ UnitAttacks.shockwave = function(square, power, world)
     end
 end
 
-UnitAttacks.uppercut = function(square, power, world)
+UnitAttacks.uppercut = function(attacker, power, world)
+    -- 1. Get the selected target from the cycle targeting system.
+    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
+        return false -- Failsafe
+    end
+    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
+
+    -- 2. Make the attacker face the target.
+    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
+    if math.abs(dx) > math.abs(dy) then
+        attacker.lastDirection = (dx > 0) and "right" or "left"
+    else
+        attacker.lastDirection = (dy > 0) and "down" or "up"
+    end
+
+    -- 3. Execute the attack on the target's tile with an airborne status effect.
     local status = {type = "airborne"}
-    executePatternAttack(square, power, AttackPatterns.uppercut, false, nil, status)
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, "enemy", nil, status)
+    return true
 end
 
 UnitAttacks.quick_step = function(attacker, power, world)
     -- 1. Get the target tile from the ground aiming cursor.
     local targetTileX, targetTileY = world.mapCursorTile.x, world.mapCursorTile.y
 
-    -- 2. Determine the path and apply 'airborne' to any enemies passed through.
+    -- 2. Validate that the target tile is empty.
+    if WorldQueries.isTileOccupied(targetTileX, targetTileY, attacker, world) then
+        return false -- Attack fails, turn is not consumed.
+    end
+
+    -- 3. Determine the path and apply 'airborne' to any enemies passed through.
     local dx = targetTileX - attacker.tileX
     local dy = targetTileY - attacker.tileY
     local distance = math.max(math.abs(dx), math.abs(dy))
@@ -227,9 +258,19 @@ UnitAttacks.quick_step = function(attacker, power, world)
         end
     end
 
-    -- 3. Set the attacker's target destination and speed.
+    -- 4. Make the attacker face the direction of movement.
+    if math.abs(dx) > math.abs(dy) then
+        attacker.lastDirection = (dx > 0) and "right" or "left"
+    else
+        attacker.lastDirection = (dy > 0) and "down" or "up"
+    end
+
+    -- 5. Set the attacker's target destination and speed for the visual movement.
     attacker.targetX, attacker.targetY = Grid.toPixels(targetTileX, targetTileY)
     attacker.speedMultiplier = 2
+
+    -- 6. Update the logical tile position immediately.
+    attacker.tileX, attacker.tileY = targetTileX, targetTileY
     return true -- Consume the turn.
 end
 

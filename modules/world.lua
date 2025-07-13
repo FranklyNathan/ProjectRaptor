@@ -17,14 +17,8 @@ function World.new()
     self.attackEffects = {}
     self.particleEffects = {}
     self.damagePopups = {}
-    self.switchPlayerEffects = {}
-    self.grappleLineEffects = {}
     self.new_entities = {}
     self.afterimageEffects = {}
-    self.playerTeamStatus = { -- For team-wide status effects like Magnezone Square's L-ability
-        isHealingFromAttacks = nil,
-        duration = nil
-    }
 
     -- Turn-based state
     self.turn = "player" -- "player" or "enemy"
@@ -59,11 +53,9 @@ function World.new()
     self.characterGrid = {}
     self.cursorPos = {x = 1, y = 1}
     self.selectedSquare = nil
-    self.playerToKeepActive = nil -- Used to re-select the correct player after a party swap.
 
     -- A table to hold the state of team-wide passives, calculated once per frame.
     self.passives = {
-        electivireActive = false,
         venusaurCritBonus = 0,
         florgesActive = false,
         drapionActive = false,

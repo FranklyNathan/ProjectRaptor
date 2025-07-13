@@ -4,6 +4,7 @@
 local CombatFormulas = require("modules.combat_formulas")
 local CombatActions = require("modules.combat_actions")
 local EffectFactory = require("modules.effect_factory")
+local Grid = require("modules.grid")
 
 local ProjectileSystem = {}
 
@@ -32,17 +33,22 @@ function ProjectileSystem.update(dt, world)
             if beamMoved then
                 local beamHit = false
                 local targets = proj.isEnemyProjectile and world.players or world.enemies
+                -- Get the projectile's current tile position
+                local projTileX, projTileY = Grid.toTile(entity.x, entity.y)
 
                 for _, target in ipairs(targets) do
-                    local totalBonusCrit = (proj.attacker.type == "player" and venusaurSquareCritBonus or 0)
-                    local damage, isCrit = CombatFormulas.calculateFinalDamage(proj.attacker, target, proj.power, totalBonusCrit)
-                    if CombatActions.applyDamageToTarget(target, entity.x, entity.y, entity.size, damage, isCrit) then
+                    -- Check for collision based on tile coordinates
+                    if target.tileX == projTileX and target.tileY == projTileY and target.hp > 0 then
+                        local totalBonusCrit = (proj.attacker.type == "player" and venusaurSquareCritBonus or 0)
+                        local damage, isCrit = CombatFormulas.calculateFinalDamage(proj.attacker, target, proj.power, totalBonusCrit)
+                        -- Directly apply damage, no need for the old collision check function
+                        CombatActions.applyDirectDamage(target, damage, isCrit)
                         beamHit = true
                         EffectFactory.addAttackEffect(entity.x, entity.y, entity.size, entity.size, {1, 0, 0, 1}, 0, proj.attacker, 0, false, target.type)
                         if proj.statusEffect then
                             CombatActions.applyStatusEffect(target, proj.statusEffect)
                         end
-                        break
+                        break -- Stop checking other targets once one is hit
                     end
                 end
 
