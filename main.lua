@@ -10,7 +10,6 @@ local Assets = require("modules.assets")
 local AnimationSystem = require("systems/animation_system")
 CharacterBlueprints = require("data.character_blueprints")
 EntityFactory = require("data.entities")
-local AISystems = require("systems.ai_systems")
 local StatusSystem = require("systems.status_system")
 local CareeningSystem = require("systems.careening_system")
 local StatSystem = require("systems.stat_system")
@@ -18,7 +17,8 @@ local ActionBarSystem = require("systems.action_bar_system")
 local EffectTimerSystem = require("systems.effect_timer_system")
 local ProjectileSystem = require("systems.projectile_system")
 local MovementSystem = require("systems.movement_system")
-local PlayerAttackSystem = require("systems.player_attack_system")
+local EnemyTurnSystem = require("systems.enemy_turn_system")
+local TurnBasedMovementSystem = require("systems/turn_based_movement_system")
 local PlayerSwitchSystem = require("systems.player_switch_system")
 local PassiveSystem = require("systems.passive_system")
 local TeamStatusSystem = require("systems.team_status_system")
@@ -28,13 +28,10 @@ local DashSystem = require("systems.dash_system")
 local GrappleSystem = require("systems.grapple_system")
 local PidgeotSystem = require("systems/pidgeot_system")
 local DeathSystem = require("systems.death_system")
-local GameTimerSystem = require("systems.game_timer_system")
-local WinConditionSystem = require("systems.win_condition_system")
-local ActivePlayerValidationSystem = require("systems/active_player_validation_system")
 local Renderer = require("modules.renderer")
 local CombatActions = require("modules.combat_actions")
-local ActivePlayerSyncSystem = require("systems/active_player_sync_system")
 local EventBus = require("modules.event_bus")
+local Camera = require("modules.camera")
 local InputHandler = require("modules.input_handler")
 
 world = nil -- Will be initialized in love.load after assets are loaded
@@ -48,20 +45,17 @@ local scale = 1
 -- The order is important: Intent -> Action -> Resolution
 local update_systems = {
     -- 1. State and timer updates
-    GameTimerSystem,
     StatSystem,
-    StatusSystem,
     ActionBarSystem,
     EffectTimerSystem,
     PassiveSystem,
     PlayerSwitchSystem,
-    TeamStatusSystem,
     -- 2. Movement and Animation (update physical state)
+    TurnBasedMovementSystem,
     MovementSystem,
     AnimationSystem,
     -- 3. AI and Player Actions (decide what to do)
-    PlayerAttackSystem,
-    AISystems,
+    EnemyTurnSystem,
     -- 4. Update ongoing effects of actions
     ContinuousAttackSystem,
     ProjectileSystem,
@@ -71,7 +65,7 @@ local update_systems = {
     CareeningSystem,
     -- 5. Resolve the consequences of actions
     AttackResolutionSystem,
-    DeathSystem,
+    DeathSystem
 }
 
 -- love.load() is called once when the game starts.
@@ -127,21 +121,19 @@ end
 function love.update(dt)
     -- Only update game logic if not paused
     if world.gameState == "gameplay" then
+        -- Handle continuous input for things like holding down keys for cursor movement.
+        InputHandler.handle_continuous_input(dt, world)
+
+        -- Update the camera position based on the cursor
+        Camera.update(dt, world)
+
         -- Main system update loop
         for _, system in ipairs(update_systems) do
             system.update(dt, world)
         end
 
-        -- Handle continuous input after attacks have been processed for the frame.
-        InputHandler.handle_movement_input(world)
-
         -- Process all entity additions and deletions that were queued by the systems.
         world:process_additions_and_deletions()
-
-        -- Run systems that must happen *after* entity deletion
-        ActivePlayerValidationSystem.update(world)
-        ActivePlayerSyncSystem.update(world)
-        WinConditionSystem.update(world)
 
     elseif world.gameState == "party_select" then
         -- When paused, we want all character sprites on the select screen to animate.

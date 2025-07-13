@@ -1,9 +1,227 @@
 -- input_handler.lua
 -- Contains all logic for processing player keyboard input.
 
+local Pathfinding = require("modules.pathfinding")
+local AttackHandler = require("modules.attack_handler")
+local AttackPatterns = require("modules.attack_patterns")
 local WorldQueries = require("modules.world_queries")
+local Grid = require("modules.grid")
 
 local InputHandler = {}
+
+--------------------------------------------------------------------------------
+-- TURN-BASED HELPER FUNCTIONS
+--------------------------------------------------------------------------------
+
+-- Checks if all living player units have taken their action for the turn.
+local function allPlayersHaveActed(world)
+    for _, player in ipairs(world.players) do
+        if player.hp > 0 and not player.hasActed then
+            return false -- Found a player who hasn't acted yet.
+        end
+    end
+    return true -- All living players have acted.
+end
+
+-- Jumps the cursor to the next available player unit.
+local function focus_next_available_player(world)
+    for _, player in ipairs(world.players) do
+        if player.hp > 0 and not player.hasActed then
+            world.mapCursorTile.x = player.tileX
+            world.mapCursorTile.y = player.tileY
+            return -- Found the first available player and focused.
+        end
+    end
+end
+
+-- Helper to move the cursor and update the movement path if applicable.
+local function move_cursor(dx, dy, world)
+    local newTileX = world.mapCursorTile.x + dx
+    local newTileY = world.mapCursorTile.y + dy
+
+    -- Clamp cursor to screen bounds
+    world.mapCursorTile.x = math.max(0, math.min(newTileX, Config.MAP_WIDTH_TILES - 1))
+    world.mapCursorTile.y = math.max(0, math.min(newTileY, Config.MAP_HEIGHT_TILES - 1))
+
+    -- If a unit is selected, update the movement path
+    if world.playerTurnState == "unit_selected" then
+        local goalPosKey = world.mapCursorTile.x .. "," .. world.mapCursorTile.y
+        if world.reachableTiles and world.reachableTiles[goalPosKey] then
+            local startPosKey = world.selectedUnit.tileX .. "," .. world.selectedUnit.tileY
+            world.movementPath = Pathfinding.reconstructPath(world.came_from, startPosKey, goalPosKey)
+        else
+            world.movementPath = nil -- Cursor is on an unreachable tile
+        end
+    end
+end
+
+-- Finds a player unit at a specific tile coordinate.
+local function getPlayerUnitAt(tileX, tileY, world)
+    for _, p in ipairs(world.players) do
+        if p.hp > 0 and p.tileX == tileX and p.tileY == tileY then
+            return p
+        end
+    end
+    return nil
+end
+
+-- Handles input when the player is freely moving the cursor around the map.
+local function handle_free_roam_input(key, world)
+    if key == "j" then -- Universal "Confirm" / "Action" key
+        local unit = getPlayerUnitAt(world.mapCursorTile.x, world.mapCursorTile.y, world)
+        if unit and not unit.hasActed then
+            -- If the cursor is on an available player unit, select it.
+            world.selectedUnit = unit
+            world.playerTurnState = "unit_selected"
+            -- Calculate movement range and pathing data
+            world.reachableTiles, world.came_from = Pathfinding.calculateReachableTiles(unit, world)
+            world.movementPath = {} -- Start with an empty path
+        else
+            -- If the cursor is on an empty tile, open the map menu.
+            local isOccupied = WorldQueries.isTileOccupied(world.mapCursorTile.x, world.mapCursorTile.y, nil, world)
+            if not isOccupied then
+                world.playerTurnState = "map_menu"
+                world.mapMenu.active = true
+                world.mapMenu.options = {{text = "End Turn", key = "end_turn"}}
+                world.mapMenu.selectedIndex = 1
+            end
+        end
+    end
+end
+
+-- Handles input when a unit is selected and the player is choosing a destination.
+local function handle_unit_selected_input(key, world)
+    if key == "j" then -- Confirm Move
+        if world.movementPath and #world.movementPath > 0 then
+            world.selectedUnit.components.movement_path = world.movementPath
+            world.playerTurnState = "unit_moving"
+            world.selectedUnit = nil
+            world.reachableTiles = nil
+            world.movementPath = nil
+        end
+        return -- Exit to prevent cursor update on confirm
+    elseif key == "k" then -- Cancel
+        world.playerTurnState = "free_roam"
+        world.selectedUnit = nil
+        world.reachableTiles = nil
+        world.movementPath = nil
+        return -- Exit to prevent cursor update on cancel
+    end
+end
+
+-- Handles input when the post-move action menu is open.
+local function handle_action_menu_input(key, world)
+    local menu = world.actionMenu
+    if not menu.active then return end
+
+    if key == "w" then
+        -- Wrap around to the bottom when moving up from the top.
+        menu.selectedIndex = (menu.selectedIndex - 2 + #menu.options) % #menu.options + 1
+    elseif key == "s" then
+        -- Wrap around to the top when moving down from the bottom.
+        menu.selectedIndex = menu.selectedIndex % #menu.options + 1
+    elseif key == "k" then -- Cancel action menu
+        -- For now, cancelling the menu is the same as selecting "Wait".
+        -- In the future, this could undo the movement.
+        menu.unit.hasActed = true
+        menu.active = false
+        world.playerTurnState = "free_roam"
+        if allPlayersHaveActed(world) then
+            world:endTurn()
+        else
+            focus_next_available_player(world)
+        end
+    elseif key == "j" then -- Confirm action
+
+        local selectedOption = menu.options[menu.selectedIndex]
+        if not selectedOption then return end
+
+        if selectedOption.key == "wait" then
+            menu.unit.hasActed = true
+            menu.active = false
+            world.playerTurnState = "free_roam"
+            if allPlayersHaveActed(world) then
+                world:endTurn()
+            else
+                focus_next_available_player(world)
+            end
+        else -- It's an attack
+            world.playerTurnState = "attack_targeting"
+            world.selectedAttackKey = selectedOption.key
+-- Pre-calculate the attack AoE for rendering
+            local attackData = CharacterBlueprints[menu.unit.playerType].attacks[world.selectedAttackKey]
+            local patternFunc = AttackPatterns[attackData.name]
+            if patternFunc then
+                world.attackAoETiles = patternFunc(menu.unit, world)
+            else
+                world.attackAoETiles = {} -- No pattern, no preview
+            end
+        end
+    end
+end
+
+-- Handles input when the map menu is open.
+local function handle_map_menu_input(key, world)
+    local menu = world.mapMenu
+    if not menu.active then return end
+
+    -- Navigation (for future expansion)
+    if key == "w" then
+        menu.selectedIndex = (menu.selectedIndex - 2 + #menu.options) % #menu.options + 1
+    elseif key == "s" then
+        menu.selectedIndex = menu.selectedIndex % #menu.options + 1
+    elseif key == "k" then -- Cancel
+        menu.active = false
+        world.playerTurnState = "free_roam"
+    elseif key == "j" then -- Confirm
+        local selectedOption = menu.options[menu.selectedIndex]
+        if selectedOption and selectedOption.key == "end_turn" then
+            menu.active = false
+            world.playerTurnState = "free_roam" -- State will change to "enemy" anyway
+            world:endTurn()
+        end
+    end
+end
+
+-- Handles input when the player is aiming an attack.
+local function handle_attack_targeting_input(key, world)
+    local unit = world.actionMenu.unit -- The unit who is attacking
+    if not unit then return end
+
+    local directionChanged = false
+    if key == "w" then unit.lastDirection = "up"; directionChanged = true
+    elseif key == "s" then unit.lastDirection = "down"; directionChanged = true
+    elseif key == "a" then unit.lastDirection = "left"; directionChanged = true
+    elseif key == "d" then unit.lastDirection = "right"; directionChanged = true
+    elseif key == "j" then -- Confirm Attack
+        AttackHandler.execute(unit, world.selectedAttackKey, world)
+        unit.hasActed = true
+        world.playerTurnState = "free_roam"
+        world.actionMenu = { active = false, unit = nil, options = {}, selectedIndex = 1 }
+        world.selectedAttackKey = nil
+        world.attackAoETiles = nil
+        if allPlayersHaveActed(world) then
+            world:endTurn()
+        else
+            focus_next_available_player(world)
+        end
+    elseif key == "k" then -- Cancel Attack
+        world.playerTurnState = "action_menu"
+        world.actionMenu.active = true
+        world.selectedAttackKey = nil
+        world.attackAoETiles = nil
+    end
+
+    if directionChanged then
+        -- Recalculate the attack AoE for rendering
+        local attackData = CharacterBlueprints[unit.playerType].attacks[world.selectedAttackKey]
+        local patternFunc = AttackPatterns[attackData.name]
+        if patternFunc then
+            world.attackAoETiles = patternFunc(unit, world)
+        end
+    end
+end
+
 
 --------------------------------------------------------------------------------
 -- STATE-SPECIFIC HANDLERS
@@ -13,67 +231,21 @@ local stateHandlers = {}
 
 -- Handles all input during active gameplay.
 stateHandlers.gameplay = function(key, world)
-    if love.timer.getTime() - world.lastAttackTimestamp < Config.ATTACK_COOLDOWN_GLOBAL then
-        return -- Do nothing if on global cooldown
-    end
+    if world.turn ~= "player" then return end -- Only accept input on the player's turn
 
-    if key == "u" then
-        world.isAutopilotActive = not world.isAutopilotActive
-        if world.isAutopilotActive then
-            world.activePlayerIndex = 0
-        else
-            if #world.players > 0 then
-                world.activePlayerIndex = 1
-                world.players[world.activePlayerIndex].components.flash = { timer = Config.FLASH_DURATION }
-            else
-                world.activePlayerIndex = 0
-            end
-        end
-        return
-    end
-
-    if key == ";" and #world.players > 0 then
-        world.isAutopilotActive = false
-
-        local oldPlayer = world.players[world.activePlayerIndex]
-        local oldIndex = world.activePlayerIndex
-
-        world.activePlayerIndex = world.activePlayerIndex + 1
-        if world.activePlayerIndex > #world.players then
-            world.activePlayerIndex = 1
-        end
-
-        local newPlayer = world.players[world.activePlayerIndex]
-        if newPlayer then
-            newPlayer.components.flash = { timer = Config.FLASH_DURATION }
-
-            -- Only create the comet effect if the player actually changed
-            if oldIndex ~= world.activePlayerIndex and oldPlayer then
-                table.insert(world.switchPlayerEffects, {
-                    currentX = oldPlayer.x + oldPlayer.size / 2,
-                    currentY = oldPlayer.y + oldPlayer.size / 2,
-                    targetPlayer = newPlayer, -- Store a reference to the target player
-                    speed = 2500, -- Very fast
-                    trail = {},
-                    trailTimer = 0,
-                    trailInterval = 0.005
-                })
-            end
-        end
-        return -- End the handler here
-    end
-
-    if world.activePlayerIndex > 0 and world.players[world.activePlayerIndex] then
-        local currentPlayer = world.players[world.activePlayerIndex]
-        local isMoving = (currentPlayer.x ~= currentPlayer.targetX) or (currentPlayer.y ~= currentPlayer.targetY)
-        local attackData = CharacterBlueprints[currentPlayer.playerType].attacks[key]
-
-        -- Check if the key corresponds to a valid attack and the player isn't stunned/careening.
-        -- Also, only allow one move to be queued at a time.
-        if attackData and not currentPlayer.pendingAttackKey and not currentPlayer.statusEffects.stunned and not currentPlayer.statusEffects.careening then
-            -- Queue the attack. The PlayerAttackSystem will execute it when ready.
-            currentPlayer.pendingAttackKey = key
-        end
+    -- Delegate to the correct handler based on the player's current action.
+    if world.playerTurnState == "free_roam" then
+        handle_free_roam_input(key, world)
+    elseif world.playerTurnState == "unit_selected" then
+        handle_unit_selected_input(key, world)
+    elseif world.playerTurnState == "unit_moving" then
+        -- Input is locked while a unit is moving.
+    elseif world.playerTurnState == "action_menu" then
+        handle_action_menu_input(key, world)
+    elseif world.playerTurnState == "attack_targeting" then
+        handle_attack_targeting_input(key, world)
+    elseif world.playerTurnState == "map_menu" then
+        handle_map_menu_input(key, world)
     end
 end
 
@@ -129,11 +301,6 @@ function InputHandler.handle_key_press(key, currentGameState, world)
             end
 
             if partyChanged then
-                -- Store the player object that should remain active after the swap
-                if world.activePlayerIndex > 0 and world.players[world.activePlayerIndex] then
-                    world.playerToKeepActive = world.players[world.activePlayerIndex]
-                end
-
                 -- Store the positions of the current party members to assign to the new party
                 local oldPositions = {}
                 for _, p in ipairs(world.players) do
@@ -180,33 +347,42 @@ function InputHandler.handle_key_press(key, currentGameState, world)
     return currentGameState
 end
 
--- This function handles continuous key-down checks for player movement.
--- It's the refactored version of the movement block from love.update.
-function InputHandler.handle_movement_input(world)
-    if world.activePlayerIndex > 0 and world.players[world.activePlayerIndex] then
-        local currentPlayer = world.players[world.activePlayerIndex]
-        local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
+-- This function handles continuous key-down checks for cursor movement.
+function InputHandler.handle_continuous_input(dt, world)
+    -- This function should only run during the player's turn in specific states.
+    if world.turn ~= "player" or (world.playerTurnState ~= "free_roam" and world.playerTurnState ~= "unit_selected") then
+        world.cursorInput.activeKey = nil -- Reset when not in a valid state
+        return
+    end
 
-        if (currentPlayer.x == currentPlayer.targetX and currentPlayer.y == currentPlayer.targetY) and not currentPlayer.statusEffects.careening then
-            local newTargetX, newTargetY = currentPlayer.x, currentPlayer.y
+    local cursor = world.cursorInput
+    local dx, dy = 0, 0
+    local currentKey = nil
 
-            if love.keyboard.isDown("w") then
-                newTargetY, currentPlayer.lastDirection = newTargetY - currentPlayer.moveStep, "up"
-            elseif love.keyboard.isDown("s") then
-                newTargetY, currentPlayer.lastDirection = newTargetY + currentPlayer.moveStep, "down"
-            elseif love.keyboard.isDown("a") then
-                newTargetX, currentPlayer.lastDirection = newTargetX - currentPlayer.moveStep, "left"
-            elseif love.keyboard.isDown("d") then
-                newTargetX, currentPlayer.lastDirection = newTargetX + currentPlayer.moveStep, "right"
-            end
+    -- Determine which key is being pressed, giving priority to W/S over A/D.
+    if love.keyboard.isDown("w") then currentKey = "w"; dy = -1
+    elseif love.keyboard.isDown("s") then currentKey = "s"; dy = 1
+    elseif love.keyboard.isDown("a") then currentKey = "a"; dx = -1
+    elseif love.keyboard.isDown("d") then currentKey = "d"; dx = 1
+    end
 
-            newTargetX = math.max(0, math.min(newTargetX, windowWidth - currentPlayer.size))
-            newTargetY = math.max(0, math.min(newTargetY, windowHeight - currentPlayer.size))
-
-            if (newTargetX ~= currentPlayer.x or newTargetY ~= currentPlayer.y) and not WorldQueries.isTileOccupied(newTargetX, newTargetY, currentPlayer.size, currentPlayer, world) then
-                currentPlayer.targetX, currentPlayer.targetY = newTargetX, newTargetY
+    if currentKey then
+        if currentKey ~= cursor.activeKey then
+            -- A new key is pressed. Move immediately and set the initial delay.
+            move_cursor(dx, dy, world)
+            cursor.activeKey = currentKey
+            cursor.timer = cursor.initialDelay
+        else
+            -- The same key is being held. Wait for the timer.
+            cursor.timer = cursor.timer - dt
+            if cursor.timer <= 0 then
+                move_cursor(dx, dy, world)
+                cursor.timer = cursor.timer + cursor.repeatDelay -- Add to prevent timer drift
             end
         end
+    else
+        -- No key is pressed. Reset the state.
+        cursor.activeKey = nil
     end
 end
 

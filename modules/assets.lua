@@ -153,6 +153,15 @@ function Assets.load()
         print("Warning: Could not load solid_color shader. Shaders may not be supported. Error: " .. tostring(shader_or_error_solid))
     end
 
+    local success_grey, shader_or_error_grey = pcall(love.graphics.newShader, "assets/shaders/greyscale.glsl")
+    if success_grey then
+        Assets.shaders.greyscale = shader_or_error_grey
+    else
+        -- Shader creation failed, likely because they are not supported on this system/LÖVE version.
+        Assets.shaders.greyscale = nil
+        print("Warning: Could not load greyscale shader. Shaders may not be supported. Error: " .. tostring(shader_or_error_grey))
+    end
+
     -- You can add more assets here as your game grows
     -- For example:
     -- Assets.images.enemy_goblin = love.graphics.newImage("assets/goblin.png")

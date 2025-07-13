@@ -10,6 +10,7 @@ local CharacterBlueprints = {
         attackStat = 50,
         defenseStat = 50,
         passive = "drapion_action_on_kill",
+        movement = 7,
         dominantColor = {0.5, 0.2, 0.8}, -- Drapion: Purple
         attacks = {
             j = {name = "drapion_j", power = 40, cost = 2, type = "damage", attack_style = "melee"},
@@ -23,6 +24,7 @@ local CharacterBlueprints = {
         attackStat = 40,
         defenseStat = 50,
         passive = "florges_regen",
+        movement = 5,
         dominantColor = {1.0, 0.6, 0.8}, -- Florges: Light Florges
         attacks = {
             j = {name = "florges_j", power = 20, cost = 2, type = "damage", attack_style = "melee"},
@@ -36,6 +38,7 @@ local CharacterBlueprints = {
         attackStat = 60,
         defenseStat = 50,
         passive = "venusaur_crit_bonus",
+        movement = 5,
         dominantColor = {0.6, 0.9, 0.6}, -- Venusaur: Pale Green
         attacks = {
             j = {name = "venusaur_j", power = 20, cost = 1, type = "damage", attack_style = "ranged"},
@@ -48,6 +51,7 @@ local CharacterBlueprints = {
         maxHp = 80,
         attackStat = 50,
         defenseStat = 50,
+        movement = 4,
         dominantColor = {0.6, 0.6, 0.7}, -- Magnezone: Steel Grey
         -- No team-wide passive, but has unique attack mechanics
         attacks = {
@@ -62,6 +66,7 @@ local CharacterBlueprints = {
         attackStat = 50,
         defenseStat = 50,
         passive = "electivire_comet_damage",
+        movement = 6,
         dominantColor = {1.0, 0.8, 0.1}, -- Electivire: Electric Venusaur
         attacks = {
             j = {name = "electivire_j", power = 20, cost = 5, type = "damage", attack_style = "ranged"}, -- Continuous attack, power is per hit
@@ -75,6 +80,7 @@ local CharacterBlueprints = {
         attackStat = 50,
         defenseStat = 50,
         passive = "tangrowth_careen_double",
+        movement = 4,
         dominantColor = {0.1, 0.3, 0.8}, -- Tangrowth: Dark Blue
         attacks = {
             j = {name = "tangrowth_j", power = 10, cost = 3, type = "damage", attack_style = "ranged"}, -- Grappling Hook
@@ -88,6 +94,7 @@ local CharacterBlueprints = {
         attackStat = 50,
         defenseStat = 50,
         passive = "sceptile_speed_boost",
+        movement = 8,
         dominantColor = {0.1, 0.8, 0.3}, -- Sceptile: Leaf Green
         attacks = {
             j = {name = "sceptile_j", power = 10, cost = 1, type = "utility", attack_style = "ranged"}, -- Plant Flag
@@ -101,6 +108,7 @@ local CharacterBlueprints = {
         attackStat = 50,
         defenseStat = 50,
         passive = "pidgeot_passive_placeholder", -- To be implemented
+        movement = 9,
         isFlying = true,
         dominantColor = {0.8, 0.7, 0.4}, -- Pidgeot: Sandy Brown
         attacks = {

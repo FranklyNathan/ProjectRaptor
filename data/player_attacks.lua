@@ -37,7 +37,7 @@ PlayerAttacks.drapion_j = function(square, power, world)
 end
 
 PlayerAttacks.drapion_k = function(square, power, world)
-    local status = {type = "poison", duration = math.huge}
+    local status = {type = "poison", duration = 3} -- Lasts 3 turns
     executePatternAttack(square, power, AttackPatterns.drapion_k, false, "enemy", status)
 end
 
@@ -119,7 +119,7 @@ PlayerAttacks.venusaur_l = function(square, power, world)
                 false, -- isHeal
                 "enemy", -- targetType
                 nil, -- critChanceOverride
-                {type = "paralyzed", duration = 10} -- statusEffect
+                {type = "paralyzed", duration = 2} -- statusEffect, lasts 2 turns
             )
         end
     end
@@ -167,13 +167,13 @@ end
 
 PlayerAttacks.magnezone_l = function(square, power, world)
     -- For the next 3 seconds, all enemy attacks heal players.
-    world.playerTeamStatus.isHealingFromAttacks = true
-    world.playerTeamStatus.timer = 3
+    world.playerTeamStatus.isHealingFromAttacks = true -- The active buff flag
+    world.playerTeamStatus.duration = 1 -- Lasts for 1 full turn cycle (player and enemy)
 
     -- Add a visual shield effect on all players
     for _, p in ipairs(world.players) do
         if p.hp > 0 then
-            p.shieldEffectTimer = 3
+            p.shieldEffectTimer = 1.5 -- Visual effect timer in seconds, can be different from turn duration
         end
     end
 end

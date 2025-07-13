@@ -38,7 +38,7 @@ end
 
 EnemyAttacks.archer_barrage = function(enemy, attackData, world)
     local directions = {"up", "down", "left", "right"}
-    local status = {type = "poison", duration = math.huge}
+    local status = {type = "poison", duration = 2} -- Lasts 2 turns
     for _, dir in ipairs(directions) do
         local newProjectile = EntityFactory.createProjectile(enemy.x, enemy.y, dir, enemy, attackData.power, true, status)
         world:queue_add_entity(newProjectile)

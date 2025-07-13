@@ -15,16 +15,19 @@ function MovementSystem.update(dt, world)
             local moveAmount = ((entity.finalSpeed or entity.speed) * (entity.speedMultiplier or 1)) * dt
             local epsilon = 3
 
-            if entity.x < entity.targetX then
-                entity.x = math.min(entity.targetX, entity.x + moveAmount)
-            elseif entity.x > entity.targetX then
-                entity.x = math.max(entity.targetX, entity.x - moveAmount)
-            end
-
-            if entity.y < entity.targetY then
-                entity.y = math.min(entity.targetY, entity.y + moveAmount)
-            elseif entity.y > entity.targetY then
-                entity.y = math.max(entity.targetY, entity.y - moveAmount)
+            -- Prioritize horizontal movement, then vertical, to prevent diagonal interpolation.
+            if entity.x ~= entity.targetX then
+                if entity.x < entity.targetX then
+                    entity.x = math.min(entity.targetX, entity.x + moveAmount)
+                else -- entity.x > entity.targetX
+                    entity.x = math.max(entity.targetX, entity.x - moveAmount)
+                end
+            elseif entity.y ~= entity.targetY then
+                if entity.y < entity.targetY then
+                    entity.y = math.min(entity.targetY, entity.y + moveAmount)
+                else -- entity.y > entity.targetY
+                    entity.y = math.max(entity.targetY, entity.y - moveAmount)
+                end
             end
 
             -- Create afterimage for players during movement

@@ -4,8 +4,7 @@
 local WinConditionSystem = {}
 
 function WinConditionSystem.update(world)
-    -- This system doesn't use dt.
-    world.isGameTimerFrozen = (#world.enemies == 0)
+    -- TODO: Implement win/loss logic here, e.g., changing world.gameState
 end
 
 return WinConditionSystem

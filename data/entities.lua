@@ -3,16 +3,24 @@
 -- It relies on the global Config, CharacterBlueprints, and EnemyBlueprints tables.
 
 local Assets = require("modules.assets")
+local Grid = require("modules.grid")
+
 local EntityFactory = {}
 
-function EntityFactory.createSquare(startX, startY, type, subType)
+function EntityFactory.createSquare(startTileX, startTileY, type, subType)
     local square = {}
+    -- Core grid position (for game logic)
+    square.tileX = startTileX
+    square.tileY = startTileY
+    -- Visual pixel position (for rendering and smooth movement)
+    square.x, square.y = Grid.toPixels(startTileX, startTileY)
     square.size = Config.SQUARE_SIZE
     square.moveStep = Config.MOVE_STEP
     square.speed = Config.SLIDE_SPEED
     square.type = type or "player" -- "player" or "enemy"
     square.lastDirection = "down" -- Default starting direction
     square.components = {} -- All components will be stored here
+    square.hasActed = false -- For turn-based logic
 
     -- Set properties based on type/playerType
     if square.type == "player" then
@@ -25,7 +33,7 @@ function EntityFactory.createSquare(startX, startY, type, subType)
         square.baseAttackStat = blueprint.attackStat
         square.baseDefenseStat = blueprint.defenseStat
         square.isFlying = blueprint.isFlying or false -- Add the flying trait to the entity
-        square.pendingAttackKey = nil -- For player: stores 'j' or 'k' or 'l' if attack is queued
+        square.movement = blueprint.movement or 5 -- Default movement range in tiles
 
         -- A mapping from the internal player type to the asset name for scalability.
         local playerSpriteMap = {
@@ -61,6 +69,7 @@ function EntityFactory.createSquare(startX, startY, type, subType)
         square.maxHp = blueprint.maxHp
         square.baseAttackStat = blueprint.attackStat
         square.baseDefenseStat = blueprint.defenseStat
+        square.movement = blueprint.movement or 4 -- Default movement range in tiles
 
         -- Add animation component for enemies
         local enemySpriteMap = {
@@ -103,8 +112,6 @@ function EntityFactory.createSquare(startX, startY, type, subType)
     end
 
     -- Initialize current and target positions
-    square.x = math.floor((startX / Config.MOVE_STEP) + 0.5) * Config.MOVE_STEP
-    square.y = math.floor((startY / Config.MOVE_STEP) + 0.5) * Config.MOVE_STEP
     square.targetX = square.x
     square.targetY = square.y
 

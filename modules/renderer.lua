@@ -1,6 +1,7 @@
 -- renderer.lua
 -- Contains all drawing logic for the game.
 
+local Grid = require("modules.grid")
 local Camera = require("modules.camera")
 local Assets = require("modules.assets")
 local Renderer = {}
@@ -94,6 +95,13 @@ local function draw_entity(entity, world, is_active_player)
         love.graphics.setShader() -- Ensure no shader is active for the base draw.
         love.graphics.setColor(1, 1, 1, 1) -- Reset color to white to avoid tinting the sprite.
         currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
+
+        -- Step 1.5: If the unit has acted, draw a greyscale overlay.
+        if entity.hasActed and Assets.shaders.greyscale then
+            love.graphics.setShader(Assets.shaders.greyscale)
+            Assets.shaders.greyscale:send("strength", 1.0) -- Full greyscale effect
+            currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
+        end
 
         -- Step 2: If poisoned, draw a semi-transparent pulsating overlay on top.
         if entity.statusEffects.poison and Assets.shaders.solid_color then
@@ -192,8 +200,152 @@ end
 -- This single function draws the entire game state.
 -- It receives a `gameState` table containing everything it needs to render.
 function Renderer.draw_frame(world)
-    -- Apply the camera transform. All subsequent drawing will be in "world space".
-    Camera:apply()
+    -- Draw Map Menu
+    if world.mapMenu.active then
+        local menu = world.mapMenu
+        local cursorTile = world.mapCursorTile
+        local cursorPixelX, cursorPixelY = Grid.toPixels(cursorTile.x, cursorTile.y)
+
+        -- Dynamically calculate menu width based on the longest option text
+        local maxTextWidth = 0
+        if GameFont then
+            for _, option in ipairs(menu.options) do
+                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
+            end
+        end
+
+        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
+        local menuHeight = #menu.options * 20 + 10
+        local menuX = cursorPixelX + Config.SQUARE_SIZE + 5 -- Position it to the right of the cursor
+        local menuY = cursorPixelY
+
+        -- Clamp menu position to stay on screen
+        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = cursorPixelX - menuWidth - 5 end
+        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
+        menuX = math.max(0, menuX)
+        menuY = math.max(0, menuY)
+
+        -- Draw background box
+        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
+        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setLineWidth(1)
+
+        -- Draw menu options
+        for i, option in ipairs(menu.options) do
+            if i == menu.selectedIndex then
+                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
+            else
+                love.graphics.setColor(1, 1, 1, 1) -- White for others
+            end
+            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
+        end
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    end
+
+    -- Draw Action Menu
+    if world.actionMenu.active then
+        local menu = world.actionMenu
+        local unit = menu.unit
+
+        -- Dynamically calculate menu width based on the longest option text
+        local maxTextWidth = 0
+        if GameFont then
+            for _, option in ipairs(menu.options) do
+                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
+            end
+        end
+
+        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
+        local menuHeight = #menu.options * 20 + 10
+        local menuX = unit.x + unit.size + 5 -- Position it to the right of the unit
+        local menuY = unit.y
+
+        -- Clamp menu position to stay on screen
+        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = unit.x - menuWidth - 5 end
+        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
+        menuX = math.max(0, menuX)
+        menuY = math.max(0, menuY)
+
+        -- Draw background box
+        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
+        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setLineWidth(1)
+
+        -- Draw menu options
+        for i, option in ipairs(menu.options) do
+            if i == menu.selectedIndex then
+                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
+            else
+                love.graphics.setColor(1, 1, 1, 1) -- White for others
+            end
+            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
+        end
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    end
+
+    -- Draw Turn-Based UI Elements (Movement Range, Path, Cursor)
+    if world.gameState == "gameplay" and world.turn == "player" then
+        -- 1. Draw the movement range for the selected unit.
+        if world.playerTurnState == "unit_selected" and world.reachableTiles then
+            love.graphics.setColor(0.2, 0.4, 1, 0.4) -- Semi-transparent blue
+            for posKey, _ in pairs(world.reachableTiles) do
+                local tileX = tonumber(string.match(posKey, "(-?%d+)"))
+                local tileY = tonumber(string.match(posKey, ",(-?%d+)"))
+                if tileX and tileY then
+                    local pixelX, pixelY = Grid.toPixels(tileX, tileY)
+                    love.graphics.rectangle("fill", pixelX, pixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+                end
+            end
+        end
+
+        -- 2. Draw the movement path arrow.
+        if world.playerTurnState == "unit_selected" and world.movementPath and #world.movementPath > 0 then
+            love.graphics.setColor(1, 1, 0, 0.8) -- Bright yellow
+            love.graphics.setLineWidth(3)
+
+            -- Start the line from the center of the selected unit.
+            local prevX = world.selectedUnit.x + world.selectedUnit.size / 2
+            local prevY = world.selectedUnit.y + world.selectedUnit.size / 2
+
+            for _, node in ipairs(world.movementPath) do
+                local nextX = node.x + Config.SQUARE_SIZE / 2
+                local nextY = node.y + Config.SQUARE_SIZE / 2
+                love.graphics.line(prevX, prevY, nextX, nextY)
+                prevX, prevY = nextX, nextY
+            end
+
+            love.graphics.setLineWidth(1) -- Reset line width
+        end
+
+        -- 3. Draw the map cursor.
+        if world.playerTurnState == "free_roam" or world.playerTurnState == "unit_selected" then
+            love.graphics.setColor(1, 1, 1, 1) -- White
+            love.graphics.setLineWidth(2)
+            local cursorPixelX, cursorPixelY = Grid.toPixels(world.mapCursorTile.x, world.mapCursorTile.y)
+            love.graphics.rectangle("line", cursorPixelX, cursorPixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+            love.graphics.setLineWidth(1) -- Reset line width
+        end
+
+        -- 4. Draw the Attack AoE preview
+        if world.playerTurnState == "attack_targeting" and world.attackAoETiles then
+            love.graphics.setColor(1, 0.2, 0.2, 0.5) -- Semi-transparent red
+            for _, effectData in ipairs(world.attackAoETiles) do
+                local s = effectData.shape
+                if s.type == "rect" then
+                    love.graphics.rectangle("fill", s.x, s.y, s.w, s.h)
+                elseif s.type == "line_set" then
+                    -- Could render lines here in the future if needed for previews
+                end
+            end
+            love.graphics.setColor(1, 1, 1, 1) -- Reset color
+        end
+    end
 
     -- Draw Sceptile's Flag and Zone
     if world.flag then
@@ -248,7 +400,8 @@ function Renderer.draw_frame(world)
 
     -- Draw all players
     for i, p in ipairs(world.players) do
-        local is_active = not world.isAutopilotActive and i == world.activePlayerIndex
+        -- In the turn-based system, the "active" player is the one currently selected.
+        local is_active = (p == world.selectedUnit)
         draw_entity(p, world, is_active)
     end
 
@@ -331,9 +484,6 @@ function Renderer.draw_frame(world)
         love.graphics.setLineWidth(1) -- Reset line width
     end
 
-    -- Revert the camera transform. All subsequent drawing will be in "screen space" (for UI).
-    Camera:revert()
-
 
     -- Set the custom font for all UI text. If GameFont is nil, it uses the default.
     if GameFont then
@@ -345,10 +495,11 @@ function Renderer.draw_frame(world)
 
     -- Instructions (Top-Left)
     local instructions = {
-        "WASD to move",
-        "; to switch",
-        "U for Autopilot",
-        "J/K/L to Attack"
+        "CONTROLS:",
+        "WASD: Move Cursor",
+        "J: Select / Confirm",
+        "K: Cancel / Back",
+        "Esc: Party Menu"
     }
     local yPos = 10
     for _, line in ipairs(instructions) do
@@ -359,7 +510,7 @@ function Renderer.draw_frame(world)
     -- Player Stats (Below Instructions)
     local yOffset = yPos -- Start right after instructions
     for i, p in ipairs(world.players) do
-        local statsText = string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d X=%d Y=%d", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0, math.floor(p.x), math.floor(p.y))
+        local statsText = string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d X=%d Y=%d", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0, p.tileX, p.tileY)
         love.graphics.print(statsText, 10, yOffset)
         yOffset = yOffset + 20
     end
@@ -369,42 +520,13 @@ function Renderer.draw_frame(world)
     love.graphics.print("Enemies:", 10, yOffset)
     yOffset = yOffset + 20
     for i, e in ipairs(world.enemies) do
-        local statsText = string.format("E%d (%s): HP=%d/%d X=%d Y=%d", i, e.enemyType, e.hp, e.maxHp, math.floor(e.x), math.floor(e.y))
+        local statsText = string.format("E%d (%s): HP=%d/%d X=%d Y=%d", i, e.enemyType, e.hp, e.maxHp, e.tileX, e.tileY)
         love.graphics.print(statsText, 10, yOffset)
         yOffset = yOffset + 20
     end
 
-    -- Timer (Top-Right)
-    local timerText = "Time: " .. string.format("%.0f", world.gameTimer)
-    local timerTextWidth = love.graphics.getFont():getWidth(timerText)
-    love.graphics.print(timerText, Config.VIRTUAL_WIDTH - timerTextWidth - 10, 10)
-
-    -- Queued Attacks (Top-Right, below timer)
-    do
-        local queuedAttackY = 30 -- Start below the timer
-        love.graphics.setColor(0, 1, 0, 1) -- Green text
-        for _, p in ipairs(world.players) do
-            if p.pendingAttackKey then
-                local attackData = CharacterBlueprints[p.playerType].attacks[p.pendingAttackKey]
-                if attackData then
-                    local text = string.format("%s Queued: %s", p.playerType, attackData.name)
-                    local textWidth = love.graphics.getFont():getWidth(text)
-                    love.graphics.print(text, Config.VIRTUAL_WIDTH - textWidth - 10, queuedAttackY)
-                    queuedAttackY = queuedAttackY + 20
-                end
-            end
-        end
-    end
-
     -- Reset color to white for the rest of the UI text
     love.graphics.setColor(1, 1, 1, 1)
-
-    -- Display Autopilot status
-    if world.isAutopilotActive then
-        love.graphics.setColor(0, 1, 1, 1) -- Drapion
-        love.graphics.printf("AUTOPILOT ENGAGED", 0, love.graphics.getHeight() - 30, love.graphics.getWidth(), "center")
-        love.graphics.setColor(1, 1, 1, 1) -- Reset to white
-    end
 
     -- Display PAUSED message and party select screen if game is paused
     if world.gameState == "party_select" then

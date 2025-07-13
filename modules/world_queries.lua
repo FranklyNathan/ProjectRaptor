@@ -4,12 +4,11 @@
 local Geometry = require("modules.geometry")
 
 local WorldQueries = {}
-function WorldQueries.isTileOccupied(checkX, checkY, checkSize, excludeSquare, world)
+function WorldQueries.isTileOccupied(tileX, tileY, excludeSquare, world)
     for _, s in ipairs(world.all_entities) do
         -- Only check against players and enemies, not projectiles etc.
         if (s.type == "player" or s.type == "enemy") and s ~= excludeSquare and s.hp > 0 then
-            local sCenterX, sCenterY = s.x + s.size / 2, s.y + s.size / 2
-            if sCenterX >= checkX and sCenterX < checkX + checkSize and sCenterY >= checkY and sCenterY < checkY + checkSize then
+            if s.tileX == tileX and s.tileY == tileY then
                 return true
             end
         end
@@ -17,14 +16,11 @@ function WorldQueries.isTileOccupied(checkX, checkY, checkSize, excludeSquare, w
     return false
 end
 
-function WorldQueries.isTileOccupiedBySameTeam(checkX, checkY, checkSize, originalSquare, world)
+function WorldQueries.isTileOccupiedBySameTeam(tileX, tileY, originalSquare, world)
     local teamToCheck = (originalSquare.type == "player") and world.players or world.enemies
     for _, s in ipairs(teamToCheck) do
-        if s ~= originalSquare and s.hp > 0 then
-            local sCenterX, sCenterY = s.x + s.size / 2, s.y + s.size / 2
-            if sCenterX >= checkX and sCenterX < checkX + checkSize and sCenterY >= checkY and sCenterY < checkY + checkSize then
-                return true
-            end
+        if s ~= originalSquare and s.hp > 0 and s.tileX == tileX and s.tileY == tileY then
+            return true
         end
     end
     return false

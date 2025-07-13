@@ -1,6 +1,8 @@
 -- world.lua
 -- The World object is the single source of truth for all entity data and collections.
 
+local EventBus = require("modules.event_bus")
+local Grid = require("modules.grid")
 local EntityFactory = require("data.entities")
 
 local World = {}
@@ -18,14 +20,30 @@ function World.new()
     self.switchPlayerEffects = {}
     self.grappleLineEffects = {}
     self.new_entities = {}
-    self.flag = nil -- Holds the single Sceptile flag object
     self.afterimageEffects = {}
-    self.activePlayerIndex = 1
-    self.isAutopilotActive = false
-    self.gameTimer = 0
-    self.isGameTimerFrozen = false
-    self.lastAttackTimestamp = 0
-    self.playerTeamStatus = {} -- For team-wide status effects like Magnezone Square's L-ability
+    self.playerTeamStatus = { -- For team-wide status effects like Magnezone Square's L-ability
+        isHealingFromAttacks = nil,
+        duration = nil
+    }
+
+    -- Turn-based state
+    self.turn = "player" -- "player" or "enemy"
+    self.selectedUnit = nil -- The unit currently selected by the player
+    self.playerTurnState = "free_roam" -- e.g., "free_roam", "unit_selected", "unit_moving", "action_menu", "attack_targeting", "map_menu"
+    self.mapCursorTile = {x = 0, y = 0} -- The player's cursor on the game grid, in tile coordinates
+    self.reachableTiles = nil -- Will hold the table of tiles the selected unit can move to
+    self.came_from = nil -- Holds pathfinding data for path reconstruction
+    self.movementPath = nil -- Will hold the list of nodes for the movement arrow
+    self.actionMenu = { active = false, unit = nil, options = {}, selectedIndex = 1 } -- For post-move actions
+    self.mapMenu = { active = false, options = {}, selectedIndex = 1 } -- For actions on empty tiles
+    self.selectedAttackKey = nil -- The key ('j', 'k', 'l') of the attack being targeted
+    self.attackAoETiles = nil -- The shape of the attack for the targeting preview
+    self.cursorInput = {
+        timer = 0,
+        initialDelay = 0.35, -- Time before repeat starts
+        repeatDelay = 0.08,  -- Time between subsequent repeats
+        activeKey = nil
+    }
 
     -- Game State and UI
     self.gameState = "gameplay"
@@ -41,7 +59,8 @@ function World.new()
         venusaurCritBonus = 0,
         florgesActive = false,
         drapionActive = false,
-        tangrowthCareenDouble = false
+        tangrowthCareenDouble = false,
+        sceptileSpeedBoost = false
     }
 
     -- Define the full roster in a fixed order based on the asset load sequence.
@@ -56,32 +75,41 @@ function World.new()
     -- The roster holds the state of all characters (like HP), even when they are not in the active party.
     -- We create them at a default (0,0) position. Their actual starting positions
     -- will be set when they are added to the active party or swapped in.
+
+    -- Define the starting positions for the player party (bottom-middle of the screen).
+    local mapWidthInTiles = Config.VIRTUAL_WIDTH / Config.MOVE_STEP
+    local mapHeightInTiles = Config.VIRTUAL_HEIGHT / Config.MOVE_STEP
+    local centerX = math.floor(mapWidthInTiles / 2)
+    local spawnY = mapHeightInTiles - 4 -- A few tiles from the bottom
+    local spawnPositions = {
+        {tileX = centerX - 2, tileY = spawnY}, -- Left
+        {tileX = centerX,     tileY = spawnY}, -- Center
+        {tileX = centerX + 2, tileY = spawnY}  -- Right
+    }
+
+    -- Create all playable characters and store them in the roster.
     for _, playerType in ipairs(characterOrder) do
         local playerEntity = EntityFactory.createSquare(0, 0, "player", playerType)
         self.roster[playerType] = playerEntity
     end
-
-    -- Define the starting positions for the player party (bottom-middle of the screen).
-    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
-    local playerSpawnYOffset = 5 * Config.MOVE_STEP
-    local spawnPositions = {
-        {x = windowWidth / 2 - (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}, -- Left
-        {x = windowWidth / 2, y = windowHeight / 2 + playerSpawnYOffset},                         -- Center
-        {x = windowWidth / 2 + (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}  -- Right
-    }
 
     -- Populate the initial active party with the first 3 characters from the fixed order and place them.
     for i = 1, 3 do
         local playerType = characterOrder[i]
         if playerType then
             local playerEntity = self.roster[playerType]
-            local spawnPos = spawnPositions[i]
-            playerEntity.x = spawnPos.x
-            playerEntity.y = spawnPos.y
-            playerEntity.targetX = playerEntity.x
-            playerEntity.targetY = playerEntity.y
+            local spawnPos = spawnPositions[i] -- This is now in tile coordinates
+            playerEntity.tileX, playerEntity.tileY = spawnPos.tileX, spawnPos.tileY
+            playerEntity.x, playerEntity.y = Grid.toPixels(spawnPos.tileX, spawnPos.tileY)
+            playerEntity.targetX, playerEntity.targetY = playerEntity.x, playerEntity.y
             self:_add_entity(playerEntity)
         end
+    end
+
+    -- Set the initial cursor position to the first player.
+    if self.players[1] then
+        self.mapCursorTile.x = self.players[1].tileX
+        self.mapCursorTile.y = self.players[1].tileY
     end
 
     -- Populate the 3x3 character selection grid based on the fixed order.
@@ -99,6 +127,45 @@ function World.new()
     end
 
     return self
+end
+
+-- Manages the transition between player and enemy turns.
+function World:endTurn()
+    if self.turn == "player" then
+        -- Announce that the player's turn has ended so systems can react.
+        EventBus:dispatch("player_turn_ended", {world = self})
+
+        self.turn = "enemy"
+        -- Reset enemy state for their turn.
+        for _, enemy in ipairs(self.enemies) do
+            enemy.hasActed = false
+        end
+        -- Clean up any lingering player selection UI state.
+        self.selectedUnit = nil
+        self.reachableTiles = nil
+        self.movementPath = nil
+        self.came_from = nil
+        self.playerTurnState = "free_roam"
+    elseif self.turn == "enemy" then
+        -- Announce that the enemy's turn has ended.
+        EventBus:dispatch("enemy_turn_ended", {world = self})
+
+        self.turn = "player"
+        -- Reset player state for their turn.
+        for _, player in ipairs(self.players) do
+            player.hasActed = false
+        end
+        self.playerTurnState = "free_roam"
+
+        -- At the start of the player's turn, move the cursor to the first available unit.
+        for _, p in ipairs(self.players) do
+            if p.hp > 0 and not p.hasActed then
+                self.mapCursorTile.x = p.tileX
+                self.mapCursorTile.y = p.tileY
+                break -- Found the first one, stop searching.
+            end
+        end
+    end
 end
 
 -- Queues a new entity to be added at the end of the frame.

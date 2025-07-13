@@ -65,10 +65,10 @@ function AttackResolutionSystem.update(dt, world)
             end
 
             -- Special case for triangle beam, which hits all enemies in its path
-            if effect.statusEffect and effect.statusEffect.type == "triangle_beam" then
+            if effect.specialProperties and effect.specialProperties.type == "triangle_beam" then
                 for _, enemy in ipairs(world.enemies) do
-                    for _, line in ipairs(effect.statusEffect.lines) do
-                        if enemy.hp > 0 and Geometry.isCircleCollidingWithLine(enemy.x+enemy.size/2, enemy.y+enemy.size/2, enemy.size/2, line.x1, line.y1, line.x2, line.y2, effect.statusEffect.thickness/2) then
+                    for _, line in ipairs(effect.specialProperties.lines) do
+                        if enemy.hp > 0 and Geometry.isCircleCollidingWithLine(enemy.x+enemy.size/2, enemy.y+enemy.size/2, enemy.size/2, line.x1, line.y1, line.x2, line.y2, effect.specialProperties.thickness/2) then
                             local damage, isCrit = CombatFormulas.calculateFinalDamage(effect.attacker, enemy, effect.power, effect.critChanceOverride)
                             CombatActions.applyDirectDamage(enemy, damage, isCrit)
                             break -- Beams hit once per enemy, so break after first line collision
