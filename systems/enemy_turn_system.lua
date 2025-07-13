@@ -4,7 +4,7 @@
 local Pathfinding = require("modules.pathfinding")
 local WorldQueries = require("modules.world_queries")
 local AttackPatterns = require("modules.attack_patterns")
-local EnemyAttacks = require("data.enemy_attacks")
+local UnitAttacks = require("data.unit_attacks")
 local Grid = require("modules.grid")
 
 local EnemyTurnSystem = {}
@@ -94,13 +94,15 @@ function EnemyTurnSystem.update(dt, world)
 
         -- 1. Decide which attack to use (for now, always the first one).
         local blueprint = EnemyBlueprints[actingEnemy.enemyType]
-        local attackData = blueprint and blueprint.attacks and blueprint.attacks[1]
+        local attackName = blueprint and blueprint.attacks and blueprint.attacks[1]
+        if not attackName then actingEnemy.hasActed = true; return end
+        local attackData = AttackBlueprints[attackName]
         if not attackData then actingEnemy.hasActed = true; return end
-        local patternFunc = AttackPatterns[attackData.name]
+        local patternFunc = AttackPatterns[attackName]
 
         -- 2. Check if the enemy can attack from its current position.
         if patternFunc and WorldQueries.isTargetInPattern(actingEnemy, patternFunc, {targetPlayer}, world) then
-            EnemyAttacks[attackData.name](actingEnemy, attackData, world)
+            UnitAttacks[attackName](actingEnemy, attackData.power, world)
             actingEnemy.hasActed = true -- Mark as acted
             return
         end
@@ -110,24 +112,23 @@ function EnemyTurnSystem.update(dt, world)
         local bestAttackPosKey = findBestAttackPosition(actingEnemy, targetPlayer, patternFunc, reachableTiles, world)
 
         if bestAttackPosKey then
-            -- Found a spot to move to and then attack.
+            -- Found a spot to move to and then attack. Set the path and let the
+            -- movement system handle it. By not setting 'hasActed', the AI will
+            -- run again for this unit after it moves, allowing it to attack.
             local startKey = actingEnemy.tileX .. "," .. actingEnemy.tileY
             local path = Pathfinding.reconstructPath(came_from, startKey, bestAttackPosKey)
             if path and #path > 0 then
                 actingEnemy.components.movement_path = path
-                -- Queue the attack to be performed after the move is complete.
-                actingEnemy.components.queued_action = { type = "attack", attackData = attackData, target = targetPlayer }
+                return -- Don't mark as acted, allow attack after move.
             end
         else
-            -- Cannot get in range to attack, so just move closer.
+            -- Cannot get in range to attack, so just move closer. This will consume the turn.
             local moveOnlyDestinationKey = findClosestReachableTile(actingEnemy, targetPlayer, reachableTiles)
             if moveOnlyDestinationKey then
                 local startKey = actingEnemy.tileX .. "," .. actingEnemy.tileY
                 local path = Pathfinding.reconstructPath(came_from, startKey, moveOnlyDestinationKey)
                 if path and #path > 0 then
                     actingEnemy.components.movement_path = path
-                    -- Queue a "wait" action since no attack is possible.
-                    actingEnemy.components.queued_action = { type = "wait" }
                 end
             end
         end
@@ -136,7 +137,7 @@ function EnemyTurnSystem.update(dt, world)
         actingEnemy.hasActed = true
     else
         -- No more enemies to act, which means the enemy turn is over.
-        world:endTurn()
+        world.turnShouldEnd = true
     end
 end
 

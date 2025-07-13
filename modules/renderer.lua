@@ -32,15 +32,6 @@ local function drawHealthBar(square)
     end
 end
 
-local function drawActionBar(square)
-    local barWidth, barHeight, barYOffset = square.size, 3, square.size + 2 + 3 + 2
-    love.graphics.setColor(0.2, 0.2, 0.2, 1) -- Dark grey background for clarity
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, barWidth, barHeight)
-    local currentFillWidth = (square.actionBarCurrent / square.actionBarMax) * barWidth
-    love.graphics.setColor(0, 1, 1, 1) -- Cyan
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, currentFillWidth, barHeight)
-end
-
 local function draw_entity(entity, world, is_active_player)
     love.graphics.push()
     -- Check for the 'shake' component
@@ -85,23 +76,16 @@ local function draw_entity(entity, world, is_active_player)
 
 -- Add a bobbing effect when idle and not airborne.
         local bobbingOffset = 0
-        if currentAnim.status == "paused" and not entity.statusEffects.airborne then
+        if currentAnim.status == "paused" and not entity.statusEffects.airborne and not entity.hasActed then
             bobbingOffset = math.sin(love.timer.getTime() * 8) -- Bob up and down 1 pixel
         end
 
         local finalDrawY = baseDrawY + visualYOffset + bobbingOffset
 
-        -- Step 1: Draw the base sprite normally.
+        -- Step 1: Draw the base sprite in full color. This is the bottom layer.
         love.graphics.setShader() -- Ensure no shader is active for the base draw.
         love.graphics.setColor(1, 1, 1, 1) -- Reset color to white to avoid tinting the sprite.
         currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
-
-        -- Step 1.5: If the unit has acted, draw a greyscale overlay.
-        if entity.hasActed and Assets.shaders.greyscale then
-            love.graphics.setShader(Assets.shaders.greyscale)
-            Assets.shaders.greyscale:send("strength", 1.0) -- Full greyscale effect
-            currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
-        end
 
         -- Step 2: If poisoned, draw a semi-transparent pulsating overlay on top.
         if entity.statusEffects.poison and Assets.shaders.solid_color then
@@ -123,12 +107,11 @@ local function draw_entity(entity, world, is_active_player)
             currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
         end
 
-        -- Step 3.5: If under Magnezone's L effect, draw a green aura.
-        if entity.shieldEffectTimer and entity.shieldEffectTimer > 0 and Assets.shaders.solid_color then
-            love.graphics.setShader(Assets.shaders.solid_color)
-            -- A gentle, non-pulsating green aura
-            local alpha = 0.3
-            Assets.shaders.solid_color:send("solid_color", {0.2, 1.0, 0.2, alpha}) -- Bright Green
+        -- Step 3.7: If the unit has acted, draw a greyscale version on top of the sprite and its status effects.
+        -- This ensures the "acted" state is always visible.
+        if entity.hasActed and Assets.shaders.greyscale then
+            love.graphics.setShader(Assets.shaders.greyscale)
+            Assets.shaders.greyscale:send("strength", 1.0) -- Full greyscale effect
             currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
         end
 
@@ -141,8 +124,8 @@ local function draw_entity(entity, world, is_active_player)
             currentAnim:draw(spriteSheet, drawX, finalDrawY, rotation, 1, 1, w / 2, h)
         end
 
-        -- Step 5: Reset the shader state to avoid affecting other draw calls.
-        love.graphics.setShader()
+        -- Step 5: Reset the shader state after all drawing for this entity is done.
+        love.graphics.setShader() 
     else
         love.graphics.setColor(entity.color) -- Set the square's color
         love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
@@ -167,15 +150,14 @@ local function draw_entity(entity, world, is_active_player)
     -- This block is now empty as all enemies have sprites. It can be removed or kept for future non-sprite enemies.
 
     drawHealthBar(entity)
-    drawActionBar(entity)
 
     -- Draw flash effect if active and flashing (only for players)
     if entity.type == "player" and entity.components.flash then
         local flash = entity.components.flash
         local alpha = flash.timer / Config.FLASH_DURATION -- Fade out effect
         love.graphics.setColor(1, 1, 1, alpha) -- White flash
-        local flashX = entity.x - entity.moveStep
-        local flashY = entity.y - entity.moveStep
+        local flashX = entity.x - Config.SQUARE_SIZE
+        local flashY = entity.y - Config.SQUARE_SIZE
         local flashWidth = entity.size * 3
         local flashHeight = entity.size * 3
         love.graphics.rectangle("fill", flashX, flashY, flashWidth, flashHeight)
@@ -200,100 +182,28 @@ end
 -- This single function draws the entire game state.
 -- It receives a `gameState` table containing everything it needs to render.
 function Renderer.draw_frame(world)
-    -- Draw Map Menu
-    if world.mapMenu.active then
-        local menu = world.mapMenu
-        local cursorTile = world.mapCursorTile
-        local cursorPixelX, cursorPixelY = Grid.toPixels(cursorTile.x, cursorTile.y)
+    -- Apply the camera transformation for all world-space objects
+    Camera.apply()
 
-        -- Dynamically calculate menu width based on the longest option text
-        local maxTextWidth = 0
-        if GameFont then
-            for _, option in ipairs(menu.options) do
-                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
-            end
-        end
-
-        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
-        local menuHeight = #menu.options * 20 + 10
-        local menuX = cursorPixelX + Config.SQUARE_SIZE + 5 -- Position it to the right of the cursor
-        local menuY = cursorPixelY
-
-        -- Clamp menu position to stay on screen
-        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = cursorPixelX - menuWidth - 5 end
-        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
-        menuX = math.max(0, menuX)
-        menuY = math.max(0, menuY)
-
-        -- Draw background box
-        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
-        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
-        love.graphics.setLineWidth(1)
-
-        -- Draw menu options
-        for i, option in ipairs(menu.options) do
-            if i == menu.selectedIndex then
-                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
-            else
-                love.graphics.setColor(1, 1, 1, 1) -- White for others
-            end
-            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
-        end
-        love.graphics.setColor(1, 1, 1, 1) -- Reset color
-    end
-
-    -- Draw Action Menu
-    if world.actionMenu.active then
-        local menu = world.actionMenu
-        local unit = menu.unit
-
-        -- Dynamically calculate menu width based on the longest option text
-        local maxTextWidth = 0
-        if GameFont then
-            for _, option in ipairs(menu.options) do
-                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
-            end
-        end
-
-        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
-        local menuHeight = #menu.options * 20 + 10
-        local menuX = unit.x + unit.size + 5 -- Position it to the right of the unit
-        local menuY = unit.y
-
-        -- Clamp menu position to stay on screen
-        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = unit.x - menuWidth - 5 end
-        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
-        menuX = math.max(0, menuX)
-        menuY = math.max(0, menuY)
-
-        -- Draw background box
-        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
-        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
-        love.graphics.setLineWidth(1)
-
-        -- Draw menu options
-        for i, option in ipairs(menu.options) do
-            if i == menu.selectedIndex then
-                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
-            else
-                love.graphics.setColor(1, 1, 1, 1) -- White for others
-            end
-            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
-        end
-        love.graphics.setColor(1, 1, 1, 1) -- Reset color
-    end
-
-    -- Draw Turn-Based UI Elements (Movement Range, Path, Cursor)
+    -- Draw Turn-Based UI Elements (Ranges, Path, Cursor)
     if world.gameState == "gameplay" and world.turn == "player" then
-        -- 1. Draw the movement range for the selected unit.
+        -- 1. Draw the full attack range for the selected unit (the "danger zone").
+        -- This is drawn first so that the blue movement range tiles can draw over it.
+        if world.playerTurnState == "unit_selected" and world.attackableTiles then
+            love.graphics.setColor(1, 0.2, 0.2, 0.6) -- Faint, transparent red
+            for posKey, _ in pairs(world.attackableTiles) do
+                local tileX = tonumber(string.match(posKey, "(-?%d+)"))
+                local tileY = tonumber(string.match(posKey, ",(-?%d+)"))
+                if tileX and tileY then
+                    local pixelX, pixelY = Grid.toPixels(tileX, tileY)
+                    love.graphics.rectangle("fill", pixelX, pixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+                end
+            end
+        end
+
+        -- 2. Draw the movement range for the selected unit.
         if world.playerTurnState == "unit_selected" and world.reachableTiles then
-            love.graphics.setColor(0.2, 0.4, 1, 0.4) -- Semi-transparent blue
+            love.graphics.setColor(0.2, 0.4, 1, 0.6) -- Semi-transparent blue
             for posKey, _ in pairs(world.reachableTiles) do
                 local tileX = tonumber(string.match(posKey, "(-?%d+)"))
                 local tileY = tonumber(string.match(posKey, ",(-?%d+)"))
@@ -304,7 +214,7 @@ function Renderer.draw_frame(world)
             end
         end
 
-        -- 2. Draw the movement path arrow.
+        -- 3. Draw the movement path arrow.
         if world.playerTurnState == "unit_selected" and world.movementPath and #world.movementPath > 0 then
             love.graphics.setColor(1, 1, 0, 0.8) -- Bright yellow
             love.graphics.setLineWidth(3)
@@ -323,18 +233,39 @@ function Renderer.draw_frame(world)
             love.graphics.setLineWidth(1) -- Reset line width
         end
 
-        -- 3. Draw the map cursor.
-        if world.playerTurnState == "free_roam" or world.playerTurnState == "unit_selected" then
+        -- 4. Draw the map cursor.
+        if world.playerTurnState == "free_roam" or world.playerTurnState == "unit_selected" or
+           world.playerTurnState == "cycle_targeting" or world.playerTurnState == "ground_aiming" then
             love.graphics.setColor(1, 1, 1, 1) -- White
             love.graphics.setLineWidth(2)
-            local cursorPixelX, cursorPixelY = Grid.toPixels(world.mapCursorTile.x, world.mapCursorTile.y)
+            local cursorPixelX, cursorPixelY
+            if world.playerTurnState == "cycle_targeting" and world.cycleTargeting.active and #world.cycleTargeting.targets > 0 then
+                local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
+                if target then
+                    -- In cycle mode, the cursor is on the target itself.
+                    cursorPixelX, cursorPixelY = target.x, target.y
+                else
+                    cursorPixelX, cursorPixelY = Grid.toPixels(world.mapCursorTile.x, world.mapCursorTile.y)
+                end
+            else
+                cursorPixelX, cursorPixelY = Grid.toPixels(world.mapCursorTile.x, world.mapCursorTile.y)
+            end
             love.graphics.rectangle("line", cursorPixelX, cursorPixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
             love.graphics.setLineWidth(1) -- Reset line width
         end
 
-        -- 4. Draw the Attack AoE preview
-        if world.playerTurnState == "attack_targeting" and world.attackAoETiles then
-            love.graphics.setColor(1, 0.2, 0.2, 0.5) -- Semi-transparent red
+        -- Draw the ground aiming grid (the valid area for ground-targeted attacks)
+        if world.playerTurnState == "ground_aiming" and world.groundAimingGrid then
+            love.graphics.setColor(0.2, 0.8, 1, 0.4) -- A light, cyan-ish color
+            for _, tile in ipairs(world.groundAimingGrid) do
+                local pixelX, pixelY = Grid.toPixels(tile.x, tile.y)
+                love.graphics.rectangle("fill", pixelX, pixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+            end
+        end
+
+        -- 5. Draw the Attack AoE preview
+        if world.playerTurnState == "ground_aiming" and world.attackAoETiles then
+            love.graphics.setColor(1, 0.2, 0.2, 0.6) -- Semi-transparent red
             for _, effectData in ipairs(world.attackAoETiles) do
                 local s = effectData.shape
                 if s.type == "rect" then
@@ -345,20 +276,59 @@ function Renderer.draw_frame(world)
             end
             love.graphics.setColor(1, 1, 1, 1) -- Reset color
         end
+
+        -- 6. Draw Cycle Targeting UI (previews, etc.)
+        if world.playerTurnState == "cycle_targeting" and world.cycleTargeting.active then
+            local cycle = world.cycleTargeting
+            if #cycle.targets > 0 then
+                local target = cycle.targets[cycle.selectedIndex]
+                local attacker = world.actionMenu.unit
+
+                if target and attacker then
+                    if world.selectedAttackName == "phantom_step" then
+                        -- For phantom_step, draw a preview of the teleport destination.
+                        -- The cursor itself acts as the highlight on the target.
+                        local dx, dy = 0, 0
+                        if target.lastDirection == "up" then dy = 1
+                        elseif target.lastDirection == "down" then dy = -1
+                        elseif target.lastDirection == "left" then dx = 1
+                        elseif target.lastDirection == "right" then dx = -1
+                        end
+                        local behindTileX, behindTileY = target.tileX + dx, target.tileY + dy
+                        local behindPixelX, behindPixelY = Grid.toPixels(behindTileX, behindTileY)
+
+                        love.graphics.setColor(1, 0, 1, 0.8) -- Magenta
+                        love.graphics.setLineWidth(2)
+                        love.graphics.line(attacker.x + attacker.size/2, attacker.y + attacker.size/2, behindPixelX + Config.SQUARE_SIZE/2, behindPixelY + Config.SQUARE_SIZE/2)
+                        love.graphics.rectangle("line", behindPixelX, behindPixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+                        love.graphics.setLineWidth(1) -- Reset
+                    elseif world.selectedAttackName == "hookshot" then
+                        -- Draw a red line preview for hookshot
+                        love.graphics.setColor(1, 0.2, 0.2, 0.6) -- Semi-transparent red
+                        local dist = math.abs(attacker.tileX - target.tileX) + math.abs(attacker.tileY - target.tileY)
+
+                        if attacker.tileX == target.tileX then -- Vertical line
+                            local dirY = (target.tileY > attacker.tileY) and 1 or -1
+                            for i = 1, dist do
+                                local pixelX, pixelY = Grid.toPixels(attacker.tileX, attacker.tileY + i * dirY)
+                                love.graphics.rectangle("fill", pixelX, pixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+                            end
+                        elseif attacker.tileY == target.tileY then -- Horizontal line
+                            local dirX = (target.tileX > attacker.tileX) and 1 or -1
+                            for i = 1, dist do
+                                local pixelX, pixelY = Grid.toPixels(attacker.tileX + i * dirX, attacker.tileY)
+                                love.graphics.rectangle("fill", pixelX, pixelY, Config.SQUARE_SIZE, Config.SQUARE_SIZE)
+                            end
+                        end
+                        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+                    end
+                end
+            end
+        end
     end
 
     -- Draw Sceptile's Flag and Zone
     if world.flag then
-        -- Draw the zone border
-        local zoneRadiusInTiles = math.floor(world.flag.zoneSize / 2)
-        local zoneTopLeftX = world.flag.x - zoneRadiusInTiles * Config.MOVE_STEP
-        local zoneTopLeftY = world.flag.y - zoneRadiusInTiles * Config.MOVE_STEP
-        local zonePixelSize = world.flag.zoneSize * Config.MOVE_STEP
-        love.graphics.setColor(1, 1, 0, 0.5) -- Semi-transparent yellow
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", zoneTopLeftX, zoneTopLeftY, zonePixelSize, zonePixelSize)
-        love.graphics.setLineWidth(1)
-
         -- Draw the flag sprite
         local flagSprite = world.flag.sprite
         if flagSprite then
@@ -419,17 +389,6 @@ function Renderer.draw_frame(world)
             love.graphics.setColor(effect.color[1], effect.color[2], effect.color[3], alpha) -- Use effect's color
             love.graphics.rectangle("fill", effect.x, effect.y, effect.width, effect.height)
         end
-
-        -- Special drawing for triangle beam
-        if effect.specialProperties and effect.specialProperties.type == "triangle_beam" then
-            local alpha = effect.currentFlashTimer / effect.flashDuration
-            love.graphics.setColor(effect.color[1], effect.color[2], effect.color[3], alpha)
-            love.graphics.setLineWidth(effect.specialProperties.thickness)
-            for _, line in ipairs(effect.specialProperties.lines) do
-                love.graphics.line(line.x1, line.y1, line.x2, line.y2)
-            end
-            love.graphics.setLineWidth(1)
-        end
     end
 
     -- Draw Venusaursquare's beam projectiles
@@ -484,6 +443,127 @@ function Renderer.draw_frame(world)
         love.graphics.setLineWidth(1) -- Reset line width
     end
 
+    -- Draw new grappling hooks and their lines
+    for _, entity in ipairs(world.all_entities) do
+        if entity.type == "grapple_hook" and entity.components.grapple_hook then
+            local hookComp = entity.components.grapple_hook
+            local attacker = hookComp.attacker
+
+            -- Draw the hook itself
+            love.graphics.setColor(entity.color)
+            love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+
+            -- Draw the line from the attacker to the hook
+            if attacker then
+                love.graphics.setColor(0.6, 0.3, 0.1, 1) -- Brown color for the grapple line
+                love.graphics.setLineWidth(2)
+                local x1, y1 = attacker.x + attacker.size / 2, attacker.y + attacker.size / 2
+                local x2, y2 = entity.x + entity.size / 2, entity.y + entity.size / 2
+                love.graphics.line(x1, y1, x2, y2)
+                love.graphics.setLineWidth(1) -- Reset
+            end
+        end
+    end
+
+    -- Revert the camera transformation to draw screen-space UI
+    Camera.revert()
+
+    -- Draw Map Menu
+    if world.mapMenu.active then
+        local menu = world.mapMenu
+        local cursorTile = world.mapCursorTile
+        local worldCursorX, worldCursorY = Grid.toPixels(cursorTile.x, cursorTile.y)
+
+        -- Convert world coordinates to screen coordinates for UI positioning
+        local screenCursorX = worldCursorX - Camera.x
+        local screenCursorY = worldCursorY - Camera.y
+
+        -- Dynamically calculate menu width based on the longest option text
+        local maxTextWidth = 0
+        if GameFont then
+            for _, option in ipairs(menu.options) do
+                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
+            end
+        end
+
+        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
+        local menuHeight = #menu.options * 20 + 10
+        local menuX = screenCursorX + Config.SQUARE_SIZE + 5 -- Position it to the right of the cursor
+        local menuY = screenCursorY
+
+        -- Clamp menu position to stay on screen
+        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = screenCursorX - menuWidth - 5 end
+        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
+        menuX = math.max(0, menuX)
+        menuY = math.max(0, menuY)
+
+        -- Draw background box
+        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
+        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setLineWidth(1)
+
+        -- Draw menu options
+        for i, option in ipairs(menu.options) do
+            if i == menu.selectedIndex then
+                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
+            else
+                love.graphics.setColor(1, 1, 1, 1) -- White for others
+            end
+            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
+        end
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    end
+
+    -- Draw Action Menu
+    if world.actionMenu.active then
+        local menu = world.actionMenu
+        local unit = menu.unit
+
+        -- Convert world coordinates to screen coordinates for UI positioning
+        local screenUnitX = unit.x - Camera.x
+        local screenUnitY = unit.y - Camera.y
+
+        -- Dynamically calculate menu width based on the longest option text
+        local maxTextWidth = 0
+        if GameFont then
+            for _, option in ipairs(menu.options) do
+                maxTextWidth = math.max(maxTextWidth, GameFont:getWidth(option.text))
+            end
+        end
+
+        local menuWidth = maxTextWidth + 20 -- 10px padding on each side
+        local menuHeight = #menu.options * 20 + 10
+        local menuX = screenUnitX + unit.size + 5 -- Position it to the right of the unit
+        local menuY = screenUnitY
+
+        -- Clamp menu position to stay on screen
+        if menuX + menuWidth > Config.VIRTUAL_WIDTH then menuX = screenUnitX - menuWidth - 5 end
+        if menuY + menuHeight > Config.VIRTUAL_HEIGHT then menuY = Config.VIRTUAL_HEIGHT - menuHeight end
+        menuX = math.max(0, menuX)
+        menuY = math.max(0, menuY)
+
+        -- Draw background box
+        love.graphics.setColor(0.1, 0.1, 0.2, 0.85)
+        love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
+        love.graphics.setLineWidth(1)
+
+        -- Draw menu options
+        for i, option in ipairs(menu.options) do
+            if i == menu.selectedIndex then
+                love.graphics.setColor(1, 1, 0, 1) -- Yellow for selected
+            else
+                love.graphics.setColor(1, 1, 1, 1) -- White for others
+            end
+            love.graphics.print(option.text, menuX + 10, menuY + 5 + (i - 1) * 20)
+        end
+        love.graphics.setColor(1, 1, 1, 1) -- Reset color
+    end
 
     -- Set the custom font for all UI text. If GameFont is nil, it uses the default.
     if GameFont then
@@ -536,7 +616,6 @@ function Renderer.draw_frame(world)
 
         love.graphics.setColor(1, 1, 1, 1) -- White color
         love.graphics.printf("PARTY SELECT", 0, 40, love.graphics.getWidth(), "center")
-        love.graphics.printf("Top row is your active party. Use WASD to move and J to swap.", 0, 60, love.graphics.getWidth(), "center")
 
         -- Draw the character grid
         local gridSize = 80

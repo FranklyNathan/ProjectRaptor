@@ -1,33 +1,47 @@
 -- camera.lua
 -- Manages the position and movement of the game's camera.
 
+local Grid = require("modules.grid")
+
 local Camera = {}
 
 -- Initialize the camera's state
 Camera.x = 0
 Camera.y = 0
-Camera.speed = 300 -- How fast the camera scrolls
 
--- The update function will be called every frame to move the camera smoothly.
+-- The update function is called every frame to move the camera smoothly.
 function Camera.update(dt, world)
-    local targetX, targetY = world.mapCursorTile.x * Config.MOVE_STEP, world.mapCursorTile.y * Config.MOVE_STEP
+    -- Get cursor position in pixels.
+    local cursorPixelX, cursorPixelY = Grid.toPixels(world.mapCursorTile.x, world.mapCursorTile.y)
+    local cursorSize = Config.SQUARE_SIZE
 
-    -- Calculate the desired camera position to center the cursor, but clamp it to the map boundaries.
-    local desiredX = targetX - Config.VIRTUAL_WIDTH / 2
-    local desiredY = targetY - Config.VIRTUAL_HEIGHT / 2
+    -- 1. By default, the camera's target is its current position (it doesn't move).
+    local targetX, targetY = Camera.x, Camera.y
 
-    -- Calculate map boundaries in pixels
-    local mapPixelWidth = Config.MAP_WIDTH_TILES * Config.MOVE_STEP
-    local mapPixelHeight = Config.MAP_HEIGHT_TILES * Config.MOVE_STEP
+    -- 2. Check if the cursor is pushing the edges of the screen and update the target accordingly.
+    -- This creates the "edge-scrolling" behavior.
+    if cursorPixelX < Camera.x then
+        targetX = cursorPixelX
+    elseif cursorPixelX + cursorSize > Camera.x + Config.VIRTUAL_WIDTH then
+        targetX = cursorPixelX + cursorSize - Config.VIRTUAL_WIDTH
+    end
 
-    -- Clamp the camera's desired position to ensure it doesn't show areas outside the map.
-    desiredX = math.max(0, math.min(desiredX, mapPixelWidth - Config.VIRTUAL_WIDTH))
-    desiredY = math.max(0, math.min(desiredY, mapPixelHeight - Config.VIRTUAL_HEIGHT))
+    if cursorPixelY < Camera.y then
+        targetY = cursorPixelY
+    elseif cursorPixelY + cursorSize > Camera.y + Config.VIRTUAL_HEIGHT then
+        targetY = cursorPixelY + cursorSize - Config.VIRTUAL_HEIGHT
+    end
 
-    -- Smoothly move the camera towards its desired position (interpolation)
-    local moveStep = Camera.speed * dt
-    Camera.x = Camera.x + (desiredX - Camera.x) * 0.1 -- Using a fraction creates a smoother, easing effect
-    Camera.y = Camera.y + (desiredY - Camera.y) * 0.1
+    -- 3. Clamp the target position to the map boundaries to prevent showing the void.
+    local mapPixelWidth = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE
+    local mapPixelHeight = Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
+    targetX = math.max(0, math.min(targetX, mapPixelWidth - Config.VIRTUAL_WIDTH))
+    targetY = math.max(0, math.min(targetY, mapPixelHeight - Config.VIRTUAL_HEIGHT))
+
+    -- 4. Smoothly move the camera towards the final target position.
+    local lerpFactor = 0.2 -- A higher value makes the camera "snappier".
+    Camera.x = Camera.x + (targetX - Camera.x) * lerpFactor
+    Camera.y = Camera.y + (targetY - Camera.y) * lerpFactor
 end
 
 -- Applies the camera's transformation to the graphics stack.

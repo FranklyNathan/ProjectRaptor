@@ -12,7 +12,6 @@ function DeathSystem.update(dt, world)
         -- Only process entities that have health and are not already marked for deletion
         if entity.hp and entity.hp <= 0 and not entity.isMarkedForDeletion then
             -- Common death logic
-            entity.continuousAttack = nil -- Stop any continuous attacks
             EffectFactory.createShatterEffect(entity.x, entity.y, entity.size, entity.color)
             entity.isMarkedForDeletion = true
             

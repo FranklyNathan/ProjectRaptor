@@ -37,7 +37,7 @@ function DashSystem.update(dt, world)
                         -- Collision detected!
                         local damage, isCrit = CombatFormulas.calculateFinalDamage(entity, enemy, dash.power, nil)
                         CombatActions.applyDirectDamage(enemy, damage, isCrit)
-                        CombatActions.applyStatusEffect(enemy, {type = "airborne", duration = 2})
+                        CombatActions.applyStatusEffect(enemy, {type = "airborne"})
                         dash.hitEnemies[enemy] = true -- Mark enemy as hit
                     end
                 end

@@ -51,6 +51,11 @@ function CombatActions.applyStatusEffect(target, effectData)
         -- complex logic later for stacking effects.
         target.statusEffects[effectData.type] = effectData
 
+        -- Standardize airborne to be a 2-second, time-based visual effect.
+        if effectData.type == "airborne" then
+            effectData.duration = 2 -- 2 seconds
+        end
+
         -- Check for Tangrowth Square's passive to double careen distance
         if effectData.type == "careening" and world_ref.passives.tangrowthCareenDouble then
             effectData.force = effectData.force * 2

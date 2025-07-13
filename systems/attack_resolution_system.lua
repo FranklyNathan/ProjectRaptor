@@ -4,7 +4,6 @@
 
 local CombatActions = require("modules.combat_actions")
 local CombatFormulas = require("modules.combat_formulas")
-local Geometry = require("modules.geometry") -- For triangle beam
 
 local AttackResolutionSystem = {}
 
@@ -38,7 +37,7 @@ function AttackResolutionSystem.update(dt, world)
                         local damage, isCrit = CombatFormulas.calculateFinalDamage(effect.attacker, target, effect.power, effect.critChanceOverride)
                         if CombatActions.applyDamageToTarget(target, effect.x, effect.y, effect.width, damage, isCrit) then
                             -- Handle status effects on successful hit
-                            if effect.statusEffect and effect.statusEffect.type ~= "triangle_beam" then
+                            if effect.statusEffect then
                                 local statusCopy = { -- Create a copy to avoid modifying the original effect data
                                     type = effect.statusEffect.type,
                                     duration = effect.statusEffect.duration,
@@ -59,19 +58,6 @@ function AttackResolutionSystem.update(dt, world)
 
                                 CombatActions.applyStatusEffect(target, statusCopy)
                             end
-                        end
-                    end
-                end
-            end
-
-            -- Special case for triangle beam, which hits all enemies in its path
-            if effect.specialProperties and effect.specialProperties.type == "triangle_beam" then
-                for _, enemy in ipairs(world.enemies) do
-                    for _, line in ipairs(effect.specialProperties.lines) do
-                        if enemy.hp > 0 and Geometry.isCircleCollidingWithLine(enemy.x+enemy.size/2, enemy.y+enemy.size/2, enemy.size/2, line.x1, line.y1, line.x2, line.y2, effect.specialProperties.thickness/2) then
-                            local damage, isCrit = CombatFormulas.calculateFinalDamage(effect.attacker, enemy, effect.power, effect.critChanceOverride)
-                            CombatActions.applyDirectDamage(enemy, damage, isCrit)
-                            break -- Beams hit once per enemy, so break after first line collision
                         end
                     end
                 end

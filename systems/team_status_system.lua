@@ -5,17 +5,10 @@ local EventBus = require("modules.event_bus")
 
 local TeamStatusSystem = {}
 
--- This system is now event-driven and only needs to listen for the end of the player's turn.
-EventBus:register("player_turn_ended", function(data)
-    local world = data.world
-    if world.playerTeamStatus.duration and world.playerTeamStatus.duration > 0 then
-        world.playerTeamStatus.duration = world.playerTeamStatus.duration - 1
-        if world.playerTeamStatus.duration <= 0 then
-            -- Reset all effects when the duration expires.
-            world.playerTeamStatus.isHealingFromAttacks = nil
-            world.playerTeamStatus.duration = nil
-        end
-    end
+-- This system is event-driven. It listens for events and applies team-wide status changes.
+-- With Ion Shield removed, this system is currently not active but is kept for future abilities.
+EventBus:register("enemy_turn_ended", function(data)
+    -- No team-wide effects currently tick down at the end of the enemy's turn.
 end)
 
 return TeamStatusSystem

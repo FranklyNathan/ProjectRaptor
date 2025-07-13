@@ -35,24 +35,37 @@ function Pathfinding.calculateReachableTiles(startUnit, world)
             local nextTileX, nextTileY = current.tileX + move.dx, current.tileY + move.dy
             local nextCost = current.cost + 1
             local nextPosKey = nextTileX .. "," .. nextTileY
+            
+            -- Check if the neighbor is within map boundaries before proceeding.
+            if nextTileX >= 0 and nextTileX < Config.MAP_WIDTH_TILES and nextTileY >= 0 and nextTileY < Config.MAP_HEIGHT_TILES then
+                if nextCost <= startUnit.movement then
+                    -- If we haven't visited this tile, or found a cheaper path to it
+                    if not cost_so_far[nextPosKey] or nextCost < cost_so_far[nextPosKey] then
+                        local isOccupied = WorldQueries.isTileOccupied(nextTileX, nextTileY, startUnit, world)
+                        
+                        local canPassThrough = false
+                        if isOccupied then
+                            if startUnit.isFlying then
+                                canPassThrough = true
+                            elseif startUnit.type == "player" and WorldQueries.isTileOccupiedBySameTeam(nextTileX, nextTileY, startUnit, world) then
+                                -- A player can pass through another player.
+                                canPassThrough = true
+                            end
+                        end
 
-            if nextCost <= startUnit.movement then
-                -- If we haven't visited this tile, or found a cheaper path to it
-                if not cost_so_far[nextPosKey] or nextCost < cost_so_far[nextPosKey] then
-                    local isOccupied = WorldQueries.isTileOccupied(nextTileX, nextTileY, startUnit, world)
-
-                    if not isOccupied then
-                        -- Valid, unoccupied tile.
-                        cost_so_far[nextPosKey] = nextCost
-                        came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
-                        reachable[nextPosKey] = nextCost -- It's a valid landing spot.
-                        table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
-                    elseif startUnit.isFlying then
-                        -- Flying units can move over occupied tiles, but cannot land on them.
-                        -- We still explore from here, but don't add it to the 'reachable' table.
-                        cost_so_far[nextPosKey] = nextCost
-                        came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
-                        table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
+                        if not isOccupied then
+                            -- Valid, unoccupied tile.
+                            cost_so_far[nextPosKey] = nextCost
+                            came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
+                            reachable[nextPosKey] = nextCost -- It's a valid landing spot.
+                            table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
+                        elseif canPassThrough then
+                            -- Can move over the tile, but cannot land on it.
+                            -- We still explore from here, but don't add it to the 'reachable' table.
+                            cost_so_far[nextPosKey] = nextCost
+                            came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
+                            table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
+                        end
                     end
                 end
             end

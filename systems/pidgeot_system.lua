@@ -33,8 +33,8 @@ function PidgeotSystem.update(dt, world)
                     -- Choose a random side to warp to.
                     local adjacentTiles = {{dx=0,dy=-1},{dx=0,dy=1},{dx=-1,dy=0},{dx=1,dy=0}}
                     local warpPos = adjacentTiles[math.random(#adjacentTiles)]
-                    local warpX = target.x + warpPos.dx * Config.MOVE_STEP
-                    local warpY = target.y + warpPos.dy * Config.MOVE_STEP
+                    local warpX = target.x + warpPos.dx * Config.SQUARE_SIZE
+                    local warpY = target.y + warpPos.dy * Config.SQUARE_SIZE
 
                     -- Teleport Pidgeot and make it face the target.
                     pidgeot.x, pidgeot.targetX = warpX, warpX

@@ -1,17 +1,15 @@
 -- attack_handler.lua
 -- This module is responsible for dispatching player attacks.
 
-local PlayerAttacks = require("data.player_attacks")
+local Unitattacks = require("data.unit_attacks")
 
 local AttackHandler = {}
 
-function AttackHandler.execute(square, attackKey, world)
-    local blueprint = CharacterBlueprints[square.playerType]
-    if not blueprint then return end
+function AttackHandler.execute(square, attackName, world)
+    local attackData = AttackBlueprints[attackName]
 
-    local attackData = blueprint.attacks[attackKey]
-    if attackData and attackData.name and PlayerAttacks[attackData.name] then
-        local result = PlayerAttacks[attackData.name](square, attackData.power, world)
+    if attackData and Unitattacks[attackName] then
+        local result = Unitattacks[attackName](square, attackData.power, world)
         -- If the attack function returns a boolean, use it. Otherwise, assume it fired successfully.
         if type(result) == "boolean" then
             return result

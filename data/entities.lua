@@ -15,7 +15,6 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
     -- Visual pixel position (for rendering and smooth movement)
     square.x, square.y = Grid.toPixels(startTileX, startTileY)
     square.size = Config.SQUARE_SIZE
-    square.moveStep = Config.MOVE_STEP
     square.speed = Config.SLIDE_SPEED
     square.type = type or "player" -- "player" or "enemy"
     square.lastDirection = "down" -- Default starting direction
@@ -33,6 +32,7 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
         square.baseAttackStat = blueprint.attackStat
         square.baseDefenseStat = blueprint.defenseStat
         square.isFlying = blueprint.isFlying or false -- Add the flying trait to the entity
+        square.weight = blueprint.weight or 1 -- Default to a light weight
         square.movement = blueprint.movement or 5 -- Default movement range in tiles
 
         -- A mapping from the internal player type to the asset name for scalability.
@@ -70,6 +70,7 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
         square.baseAttackStat = blueprint.attackStat
         square.baseDefenseStat = blueprint.defenseStat
         square.movement = blueprint.movement or 4 -- Default movement range in tiles
+        square.weight = blueprint.weight or 5 -- Default to a medium weight
 
         -- Add animation component for enemies
         local enemySpriteMap = {
@@ -93,8 +94,6 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
         end
     end
 
-    square.actionBarMax = 1 -- Default time for the first action
-    square.actionBarCurrent = square.actionBarMax -- Action bar starts full
     square.hp = square.maxHp -- All squares start with full HP
 
     -- A scalable way to handle status effects
@@ -107,8 +106,7 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
 
     -- Add an AI component to enemies
     if square.type == "enemy" then
-        local blueprint = EnemyBlueprints[subType]
-        square.components.ai = { move_timer = math.random() * blueprint.moveDelay, move_delay = blueprint.moveDelay }
+        square.components.ai = {}
     end
 
     -- Initialize current and target positions
@@ -128,7 +126,7 @@ function EntityFactory.createProjectile(x, y, direction, attacker, power, isEnem
     projectile.components = {}
     projectile.components.projectile = {
         direction = direction,
-        moveStep = Config.MOVE_STEP,
+        moveStep = Config.SQUARE_SIZE,
         moveDelay = 0.05,
         timer = 0.05,
         attacker = attacker,
@@ -141,6 +139,28 @@ function EntityFactory.createProjectile(x, y, direction, attacker, power, isEnem
     -- as the renderer has a special loop for them.
 
     return projectile
+end
+
+function EntityFactory.createGrappleHook(attacker, power, range)
+    local hook = {}
+    hook.x = attacker.x
+    hook.y = attacker.y
+    hook.size = Config.SQUARE_SIZE / 2 -- Make it smaller than a full tile
+    hook.type = "grapple_hook" -- A new type for specific systems
+    hook.color = {0.6, 0.3, 0.1, 1} -- Brown
+
+    hook.components = {}
+    hook.components.grapple_hook = {
+        attacker = attacker,
+        power = power,
+        direction = attacker.lastDirection,
+        speed = Config.SLIDE_SPEED * 4, -- Very fast
+        maxDistance = (range or 7) * Config.SQUARE_SIZE,
+        distanceTraveled = 0,
+        state = "firing" -- "firing", "retracting", "hit"
+    }
+
+    return hook
 end
 
 return EntityFactory

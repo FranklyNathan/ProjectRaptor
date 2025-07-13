@@ -8,7 +8,7 @@ local EffectFactory = require("modules.effect_factory")
 local ProjectileSystem = {}
 
 function ProjectileSystem.update(dt, world)
-    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
+    local mapWidth, mapHeight = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE, Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
     local venusaurSquareCritBonus = world.passives.venusaurCritBonus
 
     for _, entity in ipairs(world.projectiles) do
@@ -47,7 +47,7 @@ function ProjectileSystem.update(dt, world)
                 end
 
                 -- Remove beam if it hit a target or went off-screen
-                local beamOffScreen = entity.x < 0 or entity.x >= windowWidth or entity.y < 0 or entity.y >= windowHeight
+                local beamOffScreen = entity.x < 0 or entity.x >= mapWidth or entity.y < 0 or entity.y >= mapHeight
                 if beamHit or beamOffScreen then
                     entity.isMarkedForDeletion = true
                 end

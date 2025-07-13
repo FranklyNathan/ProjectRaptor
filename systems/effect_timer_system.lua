@@ -20,11 +20,12 @@ function EffectTimerSystem.update(dt, world)
             end
         end
 
-        -- Update shield effect timer
-        if s.shieldEffectTimer and s.shieldEffectTimer > 0 then
-            s.shieldEffectTimer = s.shieldEffectTimer - dt
-            if s.shieldEffectTimer <= 0 then
-                s.shieldEffectTimer = nil
+        -- Update time-based status effects like 'airborne'
+        if s.statusEffects and s.statusEffects.airborne then
+            local effect = s.statusEffects.airborne
+            effect.duration = effect.duration - dt
+            if effect.duration <= 0 then
+                s.statusEffects.airborne = nil
             end
         end
     end

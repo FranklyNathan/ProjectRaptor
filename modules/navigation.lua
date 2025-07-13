@@ -1,14 +1,15 @@
 -- navigation.lua
 -- Contains functions for pathfinding and calculating special movements.
 
+local Grid = require("modules.grid")
 local WorldQueries = require("modules.world_queries")
 
 local Navigation = {}
 
 function Navigation.createDash(square, direction, distance, speedMultiplier, world)
     local finalX, finalY = square.x, square.y
-    local step = Config.MOVE_STEP
-    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
+    local step = Config.SQUARE_SIZE
+    local mapWidth, mapHeight = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE, Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
 
     for i = 1, distance do
         local nextX, nextY = finalX, finalY
@@ -19,8 +20,9 @@ function Navigation.createDash(square, direction, distance, speedMultiplier, wor
         end
 
         -- Check for obstacles (other units or screen bounds)
-        local isOutOfBounds = nextX < 0 or nextX >= windowWidth or nextY < 0 or nextY >= windowHeight
-        if isOutOfBounds or WorldQueries.isTileOccupied(nextX, nextY, square.size, square, world) then
+        local isOutOfBounds = nextX < 0 or nextX >= mapWidth or nextY < 0 or nextY >= mapHeight
+        local nextTileX, nextTileY = Grid.toTile(nextX, nextY)
+        if isOutOfBounds or WorldQueries.isTileOccupied(nextTileX, nextTileY, square, world) then
             break -- Stop before hitting an obstacle
         end
         finalX, finalY = nextX, nextY
@@ -36,7 +38,7 @@ function Navigation.findPath(startSquare, targetSquare, world)
 
     local dx = targetSquare.x - startSquare.x
     local dy = targetSquare.y - startSquare.y
-    local step = Config.MOVE_STEP
+    local step = Config.SQUARE_SIZE
     local currentX, currentY = startSquare.x, startSquare.y
 
     -- Generate horizontal moves
@@ -45,7 +47,8 @@ function Navigation.findPath(startSquare, targetSquare, world)
     -- preventing the AI from trying to step on the enemy's square.
     for i = 1, (math.abs(dx) / step) - 1 do
         local nextX = currentX + xDir * step
-        if not WorldQueries.isTileOccupied(nextX, currentY, startSquare.size, startSquare, world) then
+        local nextTileX, nextTileY = Grid.toTile(nextX, currentY)
+        if not WorldQueries.isTileOccupied(nextTileX, nextTileY, startSquare, world) then
             table.insert(path, {x = nextX, y = currentY})
             currentX = nextX
         else
@@ -57,7 +60,8 @@ function Navigation.findPath(startSquare, targetSquare, world)
     local yDir = (dy > 0) and 1 or -1
     for i = 1, (math.abs(dy) / step) - 1 do
         local nextY = currentY + yDir * step
-        if not WorldQueries.isTileOccupied(currentX, nextY, startSquare.size, startSquare, world) then
+        local nextTileX, nextTileY = Grid.toTile(currentX, nextY)
+        if not WorldQueries.isTileOccupied(nextTileX, nextTileY, startSquare, world) then
             table.insert(path, {x = currentX, y = nextY})
             currentY = nextY
         else
@@ -72,8 +76,10 @@ function Navigation.repositionForAttack(square, target, world, attackPatternFunc
     if not square or not target then return end
     if not attackPatternFunc then return end -- Need a pattern to reposition
 
-    local step = Config.MOVE_STEP
+    local step = Config.SQUARE_SIZE
     local bestX, bestY, bestDistSq = square.x, square.y, math.huge
+    local mapPixelWidth = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE
+    local mapPixelHeight = Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
 
     -- Create a temporary square object once, outside the loops, for efficiency.
     -- We will update its properties on each iteration instead of creating a new table.
@@ -96,9 +102,10 @@ function Navigation.repositionForAttack(square, target, world, attackPatternFunc
                 local potentialX, potentialY = square.x + dx * step, square.y + dy * step
 
                 -- Check bounds and occupancy
-                local isOutOfBounds = potentialX < 0 or potentialX > Config.VIRTUAL_WIDTH - square.size or
-                                   potentialY < 0 or potentialY > Config.VIRTUAL_HEIGHT - square.size
-                local isOccupied = WorldQueries.isTileOccupied(potentialX, potentialY, square.size, square, world)
+                local isOutOfBounds = potentialX < 0 or potentialX > mapPixelWidth - square.size or
+                                   potentialY < 0 or potentialY > mapPixelHeight - square.size
+                local potentialTileX, potentialTileY = Grid.toTile(potentialX, potentialY)
+                local isOccupied = WorldQueries.isTileOccupied(potentialTileX, potentialTileY, square, world)
 
                 if not isOutOfBounds and not isOccupied then
                     -- Update the temp square's position

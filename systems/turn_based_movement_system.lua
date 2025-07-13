@@ -2,9 +2,17 @@
 -- This system handles moving a unit along a predefined path, one tile at a time.
 
 local Grid = require("modules.grid")
-local EnemyAttacks = require("data.enemy_attacks")
+local WorldQueries = require("modules.world_queries")
 
 local TurnBasedMovementSystem = {}
+
+-- Helper to format attack names into Title Case (e.g., "invigorating_aura" -> "Invigorating Aura").
+local function formatAttackName(name)
+    local s = name:gsub("_", " ")
+    s = s:gsub("^%l", string.upper)
+    s = s:gsub(" (%l)", function(c) return " " .. c:upper() end)
+    return s
+end
 
 function TurnBasedMovementSystem.update(dt, world)
     -- This system moves any entity that has a movement path.
@@ -44,11 +52,29 @@ function TurnBasedMovementSystem.update(dt, world)
 
                         local blueprint = CharacterBlueprints[entity.playerType]
                         local menuOptions = {}
-                        -- Populate with attacks. The keys 'j', 'k', 'l' are important.
+                        -- Populate with attacks from the blueprint's attack list.
                         if blueprint and blueprint.attacks then
-                            for key, attackData in pairs(blueprint.attacks) do
-                                -- Use a more descriptive name for the menu
-                                table.insert(menuOptions, {text = attackData.name:gsub("_", " "):gsub("^%l", string.upper), key = key})
+                            for _, attackName in ipairs(blueprint.attacks) do
+                                -- Only show attacks that are actually usable from the current position.
+                                local attackData = AttackBlueprints[attackName]
+                                if attackData then
+                                    local style = attackData.targeting_style
+                                    local showAttack = false
+
+                                    -- Attacks that don't need a pre-existing target can always be shown.
+                                    if style == "ground_aim" or style == "no_target" then
+                                        showAttack = true
+                                    -- Attacks that must hit a target are only shown if a valid target exists.
+                                    elseif style == "cycle_target" or style == "auto_hit_all" then
+                                        if #WorldQueries.findValidTargetsForAttack(entity, attackName, world) > 0 then
+                                            showAttack = true -- Only show if there are valid targets.
+                                        end
+                                    end
+
+                                    if showAttack then
+                                        table.insert(menuOptions, {text = formatAttackName(attackName), key = attackName})
+                                    end
+                                end
                             end
                         end
                         table.insert(menuOptions, {text = "Wait", key = "wait"})
@@ -57,19 +83,6 @@ function TurnBasedMovementSystem.update(dt, world)
                         world.actionMenu.unit = entity
                         world.actionMenu.options = menuOptions
                         world.actionMenu.selectedIndex = 1
-                    elseif entity.type == "enemy" then -- Enemy finished moving
-                        -- Check for and execute a queued action (like attacking).
-                        if entity.components.queued_action then
-                            local action = entity.components.queued_action
-                            if action.type == "attack" then
-                                -- Make the enemy face its target before attacking
-                                local dx, dy = action.target.x - entity.x, action.target.y - entity.y
-                                if math.abs(dx) > math.abs(dy) then entity.lastDirection = (dx > 0) and "right" or "left" else entity.lastDirection = (dy > 0) and "down" or "up" end
-                                EnemyAttacks[action.attackData.name](entity, action.attackData, world)
-                            end
-                            entity.components.queued_action = nil -- Clean up the component
-                        end
-                        entity.hasActed = true -- The enemy's turn is now complete.
                     end
                 end
             end

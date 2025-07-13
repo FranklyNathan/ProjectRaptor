@@ -36,8 +36,15 @@ function World.new()
     self.movementPath = nil -- Will hold the list of nodes for the movement arrow
     self.actionMenu = { active = false, unit = nil, options = {}, selectedIndex = 1 } -- For post-move actions
     self.mapMenu = { active = false, options = {}, selectedIndex = 1 } -- For actions on empty tiles
-    self.selectedAttackKey = nil -- The key ('j', 'k', 'l') of the attack being targeted
+    self.selectedAttackName = nil -- The name of the attack being targeted
     self.attackAoETiles = nil -- The shape of the attack for the targeting preview
+    self.attackableTiles = nil -- The full attack range of a selected unit
+    self.groundAimingGrid = nil -- The grid of valid tiles for ground-aiming attacks
+    self.cycleTargeting = { -- For abilities that cycle through targets
+        active = false,
+        targets = {},
+        selectedIndex = 1
+    }
     self.cursorInput = {
         timer = 0,
         initialDelay = 0.35, -- Time before repeat starts
@@ -45,6 +52,7 @@ function World.new()
         activeKey = nil
     }
 
+    self.turnShouldEnd = false -- New flag to defer ending the turn
     -- Game State and UI
     self.gameState = "gameplay"
     self.roster = {}
@@ -77,15 +85,20 @@ function World.new()
     -- will be set when they are added to the active party or swapped in.
 
     -- Define the starting positions for the player party (bottom-middle of the screen).
-    local mapWidthInTiles = Config.VIRTUAL_WIDTH / Config.MOVE_STEP
-    local mapHeightInTiles = Config.VIRTUAL_HEIGHT / Config.MOVE_STEP
+    local mapWidthInTiles = Config.VIRTUAL_WIDTH / Config.SQUARE_SIZE
+    local mapHeightInTiles = Config.VIRTUAL_HEIGHT / Config.SQUARE_SIZE
     local centerX = math.floor(mapWidthInTiles / 2)
     local spawnY = mapHeightInTiles - 4 -- A few tiles from the bottom
-    local spawnPositions = {
-        {tileX = centerX - 2, tileY = spawnY}, -- Left
-        {tileX = centerX,     tileY = spawnY}, -- Center
-        {tileX = centerX + 2, tileY = spawnY}  -- Right
-    }
+
+    -- Generate spawn positions for all players in a wide line.
+    local spawnPositions = {}
+    local numPlayers = #characterOrder
+    local spacing = 2 -- tiles between players
+    local totalWidth = (numPlayers - 1) * spacing
+    local startX = centerX - math.floor(totalWidth / 2)
+    for i = 1, numPlayers do
+        table.insert(spawnPositions, {tileX = startX + (i - 1) * spacing, tileY = spawnY})
+    end
 
     -- Create all playable characters and store them in the roster.
     for _, playerType in ipairs(characterOrder) do
@@ -93,9 +106,8 @@ function World.new()
         self.roster[playerType] = playerEntity
     end
 
-    -- Populate the initial active party with the first 3 characters from the fixed order and place them.
-    for i = 1, 3 do
-        local playerType = characterOrder[i]
+    -- Populate the initial active party with all characters from the roster and place them.
+    for i, playerType in ipairs(characterOrder) do
         if playerType then
             local playerEntity = self.roster[playerType]
             local spawnPos = spawnPositions[i] -- This is now in tile coordinates
@@ -104,6 +116,26 @@ function World.new()
             playerEntity.targetX, playerEntity.targetY = playerEntity.x, playerEntity.y
             self:_add_entity(playerEntity)
         end
+    end
+
+    -- Manually initialize start-of-turn positions for the very first turn.
+    -- This ensures the "undo move" feature works from the start.
+    for _, player in ipairs(self.players) do
+        player.startOfTurnTileX, player.startOfTurnTileY = player.tileX, player.tileY
+    end
+
+    -- Create and place enemies on the map.
+    local enemySpawnY = 4 -- A few tiles from the top
+    local enemySpawnPositions = {
+        {tileX = centerX - 4, tileY = enemySpawnY, type = "brawler"},
+        {tileX = centerX,     tileY = enemySpawnY - 2, type = "archer"},
+        {tileX = centerX + 4, tileY = enemySpawnY, type = "punter"}
+    }
+
+    for _, spawnData in ipairs(enemySpawnPositions) do
+        -- The factory function correctly takes tile coordinates and sets both
+        -- the logical tile position and the visual pixel position.
+        self:_add_entity(EntityFactory.createSquare(spawnData.tileX, spawnData.tileY, "enemy", spawnData.type))
     end
 
     -- Set the initial cursor position to the first player.
@@ -134,7 +166,6 @@ function World:endTurn()
     if self.turn == "player" then
         -- Announce that the player's turn has ended so systems can react.
         EventBus:dispatch("player_turn_ended", {world = self})
-
         self.turn = "enemy"
         -- Reset enemy state for their turn.
         for _, enemy in ipairs(self.enemies) do
@@ -149,11 +180,12 @@ function World:endTurn()
     elseif self.turn == "enemy" then
         -- Announce that the enemy's turn has ended.
         EventBus:dispatch("enemy_turn_ended", {world = self})
-
         self.turn = "player"
         -- Reset player state for their turn.
         for _, player in ipairs(self.players) do
             player.hasActed = false
+            -- Store the starting position for this turn, in case of move cancellation.
+            player.startOfTurnTileX, player.startOfTurnTileY = player.tileX, player.tileY
         end
         self.playerTurnState = "free_roam"
 

@@ -4,6 +4,7 @@
 
 -- Load data, modules, and systems
 local World = require("modules.world")
+AttackBlueprints = require("data/attack_blueprints")
 EnemyBlueprints = require("data.enemy_blueprints")
 Config = require("config")
 local Assets = require("modules.assets")
@@ -13,19 +14,17 @@ EntityFactory = require("data.entities")
 local StatusSystem = require("systems.status_system")
 local CareeningSystem = require("systems.careening_system")
 local StatSystem = require("systems.stat_system")
-local ActionBarSystem = require("systems.action_bar_system")
 local EffectTimerSystem = require("systems.effect_timer_system")
 local ProjectileSystem = require("systems.projectile_system")
-local MovementSystem = require("systems.movement_system")
+local MovementSystem = require("systems/movement_system")
 local EnemyTurnSystem = require("systems.enemy_turn_system")
 local TurnBasedMovementSystem = require("systems/turn_based_movement_system")
 local PlayerSwitchSystem = require("systems.player_switch_system")
 local PassiveSystem = require("systems.passive_system")
 local TeamStatusSystem = require("systems.team_status_system")
 local AttackResolutionSystem = require("systems.attack_resolution_system")
-local ContinuousAttackSystem = require("systems.continuous_attack_system")
 local DashSystem = require("systems.dash_system")
-local GrappleSystem = require("systems.grapple_system")
+local GrappleHookSystem = require("systems/grapple_hook_system")
 local PidgeotSystem = require("systems/pidgeot_system")
 local DeathSystem = require("systems.death_system")
 local Renderer = require("modules.renderer")
@@ -46,7 +45,6 @@ local scale = 1
 local update_systems = {
     -- 1. State and timer updates
     StatSystem,
-    ActionBarSystem,
     EffectTimerSystem,
     PassiveSystem,
     PlayerSwitchSystem,
@@ -57,10 +55,9 @@ local update_systems = {
     -- 3. AI and Player Actions (decide what to do)
     EnemyTurnSystem,
     -- 4. Update ongoing effects of actions
-    ContinuousAttackSystem,
     ProjectileSystem,
+    GrappleHookSystem,
     DashSystem,
-    GrappleSystem,
     PidgeotSystem,
     CareeningSystem,
     -- 5. Resolve the consequences of actions
@@ -95,20 +92,18 @@ function love.load()
     EventBus:register("enemy_died", function(data)
         -- This handles Drapion's passive ability.
         if world.passives.drapionActive then
+            -- Find the Drapion unit and refresh its action for the turn.
             for _, p in ipairs(world.players) do
-                if p.hp > 0 then p.actionBarCurrent = p.actionBarMax end
+                if p.playerType == "drapionsquare" and p.hp > 0 then
+                    p.hasActed = false
+                    EffectFactory.createDamagePopup(p, "Refreshed!", false, {0.5, 1, 0.5, 1}) -- Green text
+                end
             end
         end
     end)
 
     -- Create enemy squares (light grey)
     local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 + 100, windowHeight / 2 + 40, "enemy", "brawler"))
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 - 100, windowHeight / 2 - 80, "enemy", "brawler"))
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2, windowHeight / 2 + 100, "enemy", "archer"))
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 - 100, windowHeight / 2 + 100, "enemy", "punter"))
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 + 100, windowHeight / 2 - 80, "enemy", "archer"))
-    world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2, windowHeight / 2 - 80, "enemy", "punter"))
 
     -- Set the background color
     love.graphics.setBackgroundColor(0.1, 0.1, 0.1, 1) -- Dark grey
@@ -130,6 +125,12 @@ function love.update(dt)
         -- Main system update loop
         for _, system in ipairs(update_systems) do
             system.update(dt, world)
+        end
+
+        -- Check if the turn should end, AFTER all systems have run for this frame.
+        if world.turnShouldEnd then
+            world:endTurn()
+            world.turnShouldEnd = false -- Reset the flag
         end
 
         -- Process all entity additions and deletions that were queued by the systems.

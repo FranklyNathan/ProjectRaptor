@@ -1,5 +1,5 @@
--- greyscale.glsl
--- A simple shader to convert a texture to greyscale.
+// greyscale.glsl
+// A simple shader to convert a texture to greyscale.
 
 extern number strength; // 0.0 for no effect, 1.0 for full greyscale
 
