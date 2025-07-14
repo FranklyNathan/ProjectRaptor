@@ -22,7 +22,7 @@ function Assets.load()
     Assets.images.Electivire = love.graphics.newImage("assets/Electivire.png")
     Assets.images.Brawler = love.graphics.newImage("assets/brawler.png")
     Assets.images.Archer = love.graphics.newImage("assets/archer.png")
-    Assets.images.Flag = love.graphics.newImage("assets/flag.png") -- For Sceptile's attack
+    Assets.images.Flag = love.graphics.newImage("assets/tree.png") -- For Sceptile's attack
     Assets.images.Punter = love.graphics.newImage("assets/punter.png")
 
     -- Define animation grids

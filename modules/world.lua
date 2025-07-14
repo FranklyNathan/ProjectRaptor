@@ -8,12 +8,14 @@ local EntityFactory = require("data.entities")
 local World = {}
 World.__index = World
 
-function World.new()
+function World.new(gameMap)
     local self = setmetatable({}, World)
+    self.map = gameMap -- Store the loaded map data
     self.all_entities = {}
     self.players = {}
     self.enemies = {}
     self.projectiles = {}
+    self.obstacles = {} -- New unified list for all obstacles
     self.attackEffects = {}
     self.particleEffects = {}
     self.damagePopups = {}
@@ -86,36 +88,55 @@ function World.new()
     -- will be set when they are added to the active party or swapped in.
 
     -- Define the starting positions for the player party (bottom-middle of the screen).
-    local mapWidthInTiles = Config.VIRTUAL_WIDTH / Config.SQUARE_SIZE
-    local mapHeightInTiles = Config.VIRTUAL_HEIGHT / Config.SQUARE_SIZE
-    local centerX = math.floor(mapWidthInTiles / 2)
-    local spawnY = mapHeightInTiles - 4 -- A few tiles from the bottom
-
-    -- Generate spawn positions for all players in a wide line.
-    local spawnPositions = {}
-    local numPlayers = #characterOrder
-    local spacing = 2 -- tiles between players
-    local totalWidth = (numPlayers - 1) * spacing
-    local startX = centerX - math.floor(totalWidth / 2)
-    for i = 1, numPlayers do
-        table.insert(spawnPositions, {tileX = startX + (i - 1) * spacing, tileY = spawnY})
-    end
-
     -- Create all playable characters and store them in the roster.
     for _, playerType in ipairs(characterOrder) do
         local playerEntity = EntityFactory.createSquare(0, 0, "player", playerType)
         self.roster[playerType] = playerEntity
     end
 
-    -- Populate the initial active party with all characters from the roster and place them.
-    for i, playerType in ipairs(characterOrder) do
-        if playerType then
-            local playerEntity = self.roster[playerType]
-            local spawnPos = spawnPositions[i] -- This is now in tile coordinates
-            playerEntity.tileX, playerEntity.tileY = spawnPos.tileX, spawnPos.tileY
-            playerEntity.x, playerEntity.y = Grid.toPixels(spawnPos.tileX, spawnPos.tileY)
-            playerEntity.targetX, playerEntity.targetY = playerEntity.x, playerEntity.y
-            self:_add_entity(playerEntity)
+    -- Populate the active party based on the map's "PlayerSpawns" object layer.
+    if self.map.layers["PlayerSpawns"] then
+        for _, spawnPoint in ipairs(self.map.layers["PlayerSpawns"].objects) do
+            -- The 'name' property of the Tiled object should match the character's blueprint key.
+            local playerType = spawnPoint.name
+            if self.roster[playerType] then
+                local playerEntity = self.roster[playerType]
+                -- Tiled object coordinates are in pixels. Convert them to tile coordinates.
+                local tileX, tileY = Grid.toTile(spawnPoint.x, spawnPoint.y)
+                playerEntity.tileX, playerEntity.tileY = tileX, tileY
+                playerEntity.x, playerEntity.y = Grid.toPixels(tileX, tileY)
+                playerEntity.targetX, playerEntity.targetY = playerEntity.x, playerEntity.y
+                self:_add_entity(playerEntity)
+            end
+        end
+    end
+
+    -- Create and place enemies based on the map's "EnemySpawns" object layer.
+    if self.map.layers["EnemySpawns"] then
+        for _, spawnPoint in ipairs(self.map.layers["EnemySpawns"].objects) do
+            local enemyType = spawnPoint.name
+            local tileX, tileY = Grid.toTile(spawnPoint.x, spawnPoint.y)
+            self:_add_entity(EntityFactory.createSquare(tileX, tileY, "enemy", enemyType))
+        end
+    end
+
+    -- Create and place obstacles from the map's "Obstacles" object layer.
+    if self.map.layers["Obstacles"] then
+        for _, obj in ipairs(self.map.layers["Obstacles"].objects) do
+            local tileX, tileY = Grid.toTile(obj.x, obj.y)
+            local obstacle = {
+                x = obj.x,
+                y = obj.y,
+                tileX = tileX,
+                tileY = tileY,
+                width = obj.width,
+                height = obj.height,
+                size = obj.width, -- Assuming square obstacles for now
+                weight = (obj.properties and obj.properties.weight) or "Heavy",
+                sprite = Assets.images.Flag, -- All obstacles are trees for now
+                isObstacle = true -- A flag to identify these objects
+            }
+            table.insert(self.obstacles, obstacle)
         end
     end
 
@@ -123,20 +144,6 @@ function World.new()
     -- This ensures the "undo move" feature works from the start.
     for _, player in ipairs(self.players) do
         player.startOfTurnTileX, player.startOfTurnTileY = player.tileX, player.tileY
-    end
-
-    -- Create and place enemies on the map.
-    local enemySpawnY = 4 -- A few tiles from the top
-    local enemySpawnPositions = {
-        {tileX = centerX - 4, tileY = enemySpawnY, type = "brawler"},
-        {tileX = centerX,     tileY = enemySpawnY - 2, type = "archer"},
-        {tileX = centerX + 4, tileY = enemySpawnY, type = "punter"}
-    }
-
-    for _, spawnData in ipairs(enemySpawnPositions) do
-        -- The factory function correctly takes tile coordinates and sets both
-        -- the logical tile position and the visual pixel position.
-        self:_add_entity(EntityFactory.createSquare(spawnData.tileX, spawnData.tileY, "enemy", spawnData.type))
     end
 
     -- Set the initial cursor position to the first player.

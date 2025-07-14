@@ -47,8 +47,8 @@ local function move_cursor(dx, dy, world)
     local newTileY = world.mapCursorTile.y + dy
 
     -- Clamp cursor to screen bounds
-    newTileX = math.max(0, math.min(newTileX, Config.MAP_WIDTH_TILES - 1))
-    newTileY = math.max(0, math.min(newTileY, Config.MAP_HEIGHT_TILES - 1))
+    newTileX = math.max(0, math.min(newTileX, world.map.width - 1))
+    newTileY = math.max(0, math.min(newTileY, world.map.height - 1))
     world.mapCursorTile.x = newTileX
     world.mapCursorTile.y = newTileY
 
@@ -249,7 +249,7 @@ local function handle_action_menu_input(key, world)
                             local directions = {{0, -i}, {0, i}, {-i, 0}, {i, 0}}
                             for _, dir in ipairs(directions) do
                                 local tileX, tileY = unit.tileX + dir[1], unit.tileY + dir[2]
-                                if tileX >= 0 and tileX < Config.MAP_WIDTH_TILES and tileY >= 0 and tileY < Config.MAP_HEIGHT_TILES then
+                                if tileX >= 0 and tileX < world.map.width and tileY >= 0 and tileY < world.map.height then
                                     table.insert(world.groundAimingGrid, {x = tileX, y = tileY})
                                 end
                             end
@@ -260,7 +260,7 @@ local function handle_action_menu_input(key, world)
                             for dy = -attackData.range, attackData.range do
                                 local tileX = unit.tileX + dx
                                 local tileY = unit.tileY + dy
-                                if tileX >= 0 and tileX < Config.MAP_WIDTH_TILES and tileY >= 0 and tileY < Config.MAP_HEIGHT_TILES then
+                                if tileX >= 0 and tileX < world.map.width and tileY >= 0 and tileY < world.map.height then
                                     table.insert(world.groundAimingGrid, {x = tileX, y = tileY})
                                 end
                             end
@@ -317,8 +317,8 @@ local function move_ground_aim_cursor(dx, dy, world)
     local attackData = getAttackDataByName(world.selectedAttackName)
 
     -- By default, clamp to map bounds
-    local minX, maxX = 0, Config.MAP_WIDTH_TILES - 1
-    local minY, maxY = 0, Config.MAP_HEIGHT_TILES - 1
+    local minX, maxX = 0, world.map.width - 1
+    local minY, maxY = 0, world.map.height - 1
 
     -- If the attack has a specific range, clamp to that range around the attacker
     if attackData and attackData.range and attacker then

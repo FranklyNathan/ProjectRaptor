@@ -1,5 +1,7 @@
--- renderer.lua
--- Contains all drawing logic for the game.
+
+
+-- oldrenderer.lua
+-- An outdated, old version of the renderer. Kept here in case it's useful, since some things broke when we swapped to the new renderer.
 
 local Grid = require("modules.grid")
 local Camera = require("modules.camera")
@@ -292,17 +294,17 @@ function Renderer.draw_frame(world)
         end
     end
 
-    -- Draw Sceptile's Flag and Zone
+    -- Draw Sceptile's Tree and Zone
     if world.flag then
-        -- Draw the flag sprite
-        local flagSprite = world.flag.sprite
-        if flagSprite then
+        -- Draw the Tree sprite
+        local treeSprite = world.flag.sprite
+        if treeSprite then
             love.graphics.setColor(1, 1, 1, 1) -- Reset to white
-            local w, h = flagSprite:getDimensions()
+            local w, h = treeSprite:getDimensions()
             -- Anchor to bottom-center of its tile for consistency with characters
             local drawX = world.flag.x + world.flag.size / 2
             local drawY = world.flag.y + world.flag.size
-            love.graphics.draw(flagSprite, drawX, drawY, 0, 1, 1, w / 2, h)
+            love.graphics.draw(treeSprite, drawX, drawY, 0, 1, 1, w / 2, h)
         end
     end
 

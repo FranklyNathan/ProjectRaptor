@@ -10,9 +10,8 @@ local Config = {
     -- The size of the visible game area in pixels (24x18 tiles)
     VIRTUAL_WIDTH = 768,  -- 24 * 32
     VIRTUAL_HEIGHT = 576, -- 18 * 32
-    -- The full size of the game map in tiles
-    MAP_WIDTH_TILES = 40,
-    MAP_HEIGHT_TILES = 30,
+    -- The name of the map file to load from the 'maps' folder (without .lua extension)
+    CURRENT_MAP_NAME = "DefaultMap",
 }
 
 return Config

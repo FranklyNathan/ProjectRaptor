@@ -94,11 +94,6 @@ UnitAttacks.fireball = function(attacker, power, world)
     world:queue_add_entity(newProjectile)
 end
 
-UnitAttacks.viscous_strike = function(square, power, world)
-    local status = {type = "careening", force = 2, useAttackerDirection = true}
-    executePatternAttack(square, power, AttackPatterns.viscous_strike, false, nil, status)
-end
-
 UnitAttacks.venom_stab = function(attacker, power, world)
     local status = {type = "poison", duration = 3} -- Lasts 3 turns
     return executeCycleTargetDamageAttack(attacker, power, world, status)
@@ -134,10 +129,6 @@ UnitAttacks.phantom_step = function(square, power, world)
     EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, square, power, false, "enemy", 0.2, status)
 
     return true
-end
-
-UnitAttacks.mend = function(square, power, world)
-    executePatternAttack(square, power, AttackPatterns.viscous_strike, true, "player", nil, {cleansesPoison = true})
 end
 
 UnitAttacks.invigorating_aura = function(attacker, power, world)
@@ -220,9 +211,19 @@ UnitAttacks.quick_step = function(attacker, power, world)
         return false -- Attack fails, turn is not consumed.
     end
 
-    -- 3. Determine the path and apply 'airborne' to any enemies passed through.
-    local dx = targetTileX - attacker.tileX
-    local dy = targetTileY - attacker.tileY
+    -- 3. Store original position and immediately update the logical position.
+    -- This ensures that when 'airborne' is applied and Aetherfall triggers,
+    -- the attacker is no longer considered to be on their starting tile.
+    local startTileX, startTileY = attacker.tileX, attacker.tileY
+    attacker.tileX, attacker.tileY = targetTileX, targetTileY
+
+    -- 4. Set the attacker's target destination and speed for the visual movement.
+    attacker.targetX, attacker.targetY = Grid.toPixels(targetTileX, targetTileY)
+    attacker.speedMultiplier = 2
+
+    -- 5. Determine the path from the *original* position and apply 'airborne' to enemies passed through.
+    local dx = targetTileX - startTileX
+    local dy = targetTileY - startTileY
     local distance = math.max(math.abs(dx), math.abs(dy))
 
     if distance > 1 then -- Only check for pass-through if moving more than one tile.
@@ -234,8 +235,8 @@ UnitAttacks.quick_step = function(attacker, power, world)
 
         -- Iterate over the tiles between the start and end point.
         for i = 1, distance - 1 do
-            local pathTileX = attacker.tileX + i * dirX
-            local pathTileY = attacker.tileY + i * dirY
+            local pathTileX = startTileX + i * dirX
+            local pathTileY = startTileY + i * dirY
 
             for _, unitToHit in ipairs(targetsToCheck) do
                 if unitToHit.tileX == pathTileX and unitToHit.tileY == pathTileY and unitToHit.hp > 0 then
@@ -245,48 +246,42 @@ UnitAttacks.quick_step = function(attacker, power, world)
         end
     end
 
-    -- 4. Make the attacker face the direction of movement.
+    -- 6. Make the attacker face the direction of movement.
     if math.abs(dx) > math.abs(dy) then
         attacker.lastDirection = (dx > 0) and "right" or "left"
     else
         attacker.lastDirection = (dy > 0) and "down" or "up"
     end
 
-    -- 5. Set the attacker's target destination and speed for the visual movement.
-    attacker.targetX, attacker.targetY = Grid.toPixels(targetTileX, targetTileY)
-    attacker.speedMultiplier = 2
-
-    -- 6. Update the logical tile position immediately.
-    attacker.tileX, attacker.tileY = targetTileX, targetTileY
     return true -- Consume the turn.
 end
 
 UnitAttacks.sylvan_spire = function(square, power, world)
     -- This is the new model for a ground_aim attack.
     -- 1. Get the target tile from the ground aiming cursor.
-    local landTileX, landTileY = world.mapCursorTile.x, world.mapCursorTile.y
-    local landX, landY = Grid.toPixels(landTileX, landTileY)
-    local landTileX, landTileY = Grid.toTile(landX, landY)
+    local targetTileX, targetTileY = world.mapCursorTile.x, world.mapCursorTile.y
 
     -- 2. Validate that the target tile is empty.
-    if WorldQueries.isTileOccupied(landTileX, landTileY, nil, world) then
+    -- This query will be updated later to check the new obstacles list.
+    if WorldQueries.isTileOccupied(targetTileX, targetTileY, nil, world) then
         return false -- Attack fails, turn is not consumed.
     end
 
-    -- If a flag already exists, this new one will overwrite it.
-    world.flag = nil
-
-    -- 3. Create the flag object in the world.
-    world.flag = {
+    -- 3. Create the new obstacle object and add it to the world's list.
+    local landX, landY = Grid.toPixels(targetTileX, targetTileY)
+    local newObstacle = {
         x = landX,
         y = landY,
-        tileX = landTileX,
-        tileY = landTileY,
+        tileX = targetTileX,
+        tileY = targetTileY,
+        width = Config.SQUARE_SIZE,
+        height = Config.SQUARE_SIZE,
         size = Config.SQUARE_SIZE,
-        zoneSize = 5, -- 5x5 tile zone,
-        sprite = Assets.images.Flag,
-        weight = "Permanent" -- This makes it unmovable by grappling.
+        weight = "Permanent",
+        sprite = Assets.images.Flag, -- The tree sprite
+        isObstacle = true
     }
+    table.insert(world.obstacles, newObstacle)
 
     -- Create a visual effect on the target tile so the player sees the action.
     EffectFactory.addAttackEffect(landX, landY, Config.SQUARE_SIZE, Config.SQUARE_SIZE, {0.2, 0.8, 0.3, 0.7}, 0, square, 0, false, "none")

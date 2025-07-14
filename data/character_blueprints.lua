@@ -14,7 +14,7 @@ local CharacterBlueprints = {
         dominantColor = {0.5, 0.2, 0.8}, -- Drapion: Purple
         passives = {"Bloodrush"},
         attacks = {
-            "viscous_strike", "venom_stab", "phantom_step"
+            "venom_stab", "phantom_step"
         }
     },
     florgessquare = {
@@ -27,7 +27,7 @@ local CharacterBlueprints = {
         dominantColor = {1.0, 0.6, 0.8}, -- Florges: Light Florges
         passives = {"HealingWinds"},
         attacks = {
-            "mend", "invigorating_aura"
+            "invigorating_aura"
         }
     },
     venusaursquare = {

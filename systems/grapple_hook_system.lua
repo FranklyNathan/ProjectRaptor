@@ -28,27 +28,38 @@ function GrappleHookSystem.update(dt, world)
                 -- 2. Update distance traveled
                 hook.distanceTraveled = hook.distanceTraveled + moveAmount
 
-                -- 3. Check for collision with any valid target
+                -- 3. Check for collision with units
                 local potentialTargets = {}
                 for _, p in ipairs(world.players) do table.insert(potentialTargets, p) end
                 for _, e in ipairs(world.enemies) do table.insert(potentialTargets, e) end
-                if world.flag then table.insert(potentialTargets, world.flag) end
 
                 for _, target in ipairs(potentialTargets) do
                     -- The hook can't hit its own attacker or dead units.
-                    if target ~= hook.attacker and (target.hp == nil or target.hp > 0) then
+                    if target ~= hook.attacker and target.hp > 0 then
                         -- Simple AABB collision check
                         if entity.x < target.x + target.size and entity.x + entity.size > target.x and
                            entity.y < target.y + target.size and entity.y + entity.size > target.y then
                             -- Collision detected!
                             hook.state = "hit"
                             hook.target = target -- Store what was hit
-                            break -- Stop checking for other targets
+                            break -- Stop checking other units
                         end
                     end
                 end
 
-                -- 4. If no collision, check if max distance is reached
+                -- 4. Check for collision with obstacles (if still firing)
+                if hook.state == "firing" then
+                    for _, obstacle in ipairs(world.obstacles) do
+                        if entity.x < obstacle.x + obstacle.width and entity.x + entity.size > obstacle.x and
+                           entity.y < obstacle.y + obstacle.height and entity.y + entity.size > obstacle.y then
+                            hook.state = "hit"
+                            hook.target = obstacle
+                            break
+                        end
+                    end
+                end
+
+                -- 5. If no collision, check if max distance is reached
                 if hook.state == "firing" and hook.distanceTraveled >= hook.maxDistance then
                     -- For now, just remove the hook if it misses
                     entity.isMarkedForDeletion = true
@@ -69,14 +80,20 @@ function GrappleHookSystem.update(dt, world)
                     local pullTarget = false
                     local pullBoth = false
 
-                    if targetWeight == "Permanent" then
+                    if target.isObstacle then
+                        -- If the target is any kind of obstacle, the attacker is always pulled.
                         pullAttacker = true
-                    elseif attackerWeight < targetWeight then
-                        pullAttacker = true
-                    elseif attackerWeight > targetWeight then
-                        pullTarget = true
-                    else -- attackerWeight == targetWeight
-                        pullBoth = true
+                    else
+                        -- Standard unit-vs-unit logic
+                        if targetWeight == "Permanent" then
+                            pullAttacker = true
+                        elseif attackerWeight < targetWeight then
+                            pullAttacker = true
+                        elseif attackerWeight > targetWeight then
+                            pullTarget = true
+                        else -- attackerWeight == targetWeight
+                            pullBoth = true
+                        end
                     end
 
                     -- 3. Calculate destinations and initiate movement

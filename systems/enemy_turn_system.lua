@@ -129,8 +129,8 @@ local function findBestMoveOnlyTile(enemy, target, reachableTiles, world)
             local nextKey = nextTileX .. "," .. nextTileY
 
             if not visited[nextKey] and
-               nextTileX >= 0 and nextTileX < Config.MAP_WIDTH_TILES and
-               nextTileY >= 0 and nextTileY < Config.MAP_HEIGHT_TILES then
+               nextTileX >= 0 and nextTileX < world.map.width and
+               nextTileY >= 0 and nextTileY < world.map.height then
                 
                 -- The path for the BFS should not go through tiles occupied by other units.
                 if not WorldQueries.isTileOccupied(nextTileX, nextTileY, enemy, world) then

@@ -159,20 +159,6 @@ local function draw_entity(entity, world, is_active_player)
 end
 
 local function draw_all_entities_and_effects(world)
-    -- Draw Sceptile's Flag and Zone
-    if world.flag then
-        -- Draw the flag sprite
-        local flagSprite = world.flag.sprite
-        if flagSprite then
-            love.graphics.setColor(1, 1, 1, 1) -- Reset to white
-            local w, h = flagSprite:getDimensions()
-            -- Anchor to bottom-center of its tile for consistency with characters
-            local drawX = world.flag.x + world.flag.size / 2
-            local drawY = world.flag.y + world.flag.size
-            love.graphics.draw(flagSprite, drawX, drawY, 0, 1, 1, w / 2, h)
-        end
-    end
-
     -- Draw afterimage effects
     for _, a in ipairs(world.afterimageEffects) do
         -- If the afterimage has sprite data, draw it as a solid-color sprite.
@@ -200,7 +186,7 @@ local function draw_all_entities_and_effects(world)
         end
     end
 
-    -- Create a single list of all units to be drawn.
+    -- Create a single list of all units and obstacles to be drawn.
     local drawOrder = {}
     for _, p in ipairs(world.players) do
         table.insert(drawOrder, p)
@@ -208,16 +194,31 @@ local function draw_all_entities_and_effects(world)
     for _, e in ipairs(world.enemies) do
         table.insert(drawOrder, e)
     end
+    for _, o in ipairs(world.obstacles) do
+        table.insert(drawOrder, o)
+    end
 
     -- Sort the list by Y-coordinate. Entities lower on the screen (higher y) are drawn later (on top).
     table.sort(drawOrder, function(a, b)
         return a.y < b.y
     end)
 
-    -- Draw all units in the correct Z-order.
+    -- Draw all units and obstacles in the correct Z-order.
     for _, entity in ipairs(drawOrder) do
-        local is_active = (entity.type == "player" and entity == world.selectedUnit)
-        draw_entity(entity, world, is_active)
+        if entity.isObstacle then
+            -- Draw the obstacle sprite
+            if entity.sprite then
+                love.graphics.setColor(1, 1, 1, 1)
+                local w, h = entity.sprite:getDimensions()
+                -- Anchor to bottom-center of its tile for consistency with characters
+                local drawX = entity.x + entity.size / 2
+                local drawY = entity.y + entity.size
+                love.graphics.draw(entity.sprite, drawX, drawY, 0, 1, 1, w / 2, h)
+            end
+        else -- It's a character
+            local is_active = (entity.type == "player" and entity == world.selectedUnit)
+            draw_entity(entity, world, is_active)
+        end
     end
 
     -- Draw active attack effects (flashing tiles)
@@ -662,6 +663,12 @@ function Renderer.draw(world)
 
     -- 2. Apply camera for world-space drawing
     Camera.apply()
+
+    -- Draw the Tiled map. This will draw all visible layers.
+    if world.map then
+        world.map:draw()
+    end
+
     -- Draw UI elements like range indicators first, so they appear under units.
     draw_world_space_ui(world)
     draw_all_entities_and_effects(world)

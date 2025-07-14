@@ -14,7 +14,6 @@
 
 local AttackBlueprints = {
     -- Damaging Melee Attacks
-    viscous_strike = {power = 40, type = "damage", targeting_style = "directional_aim"},
     venom_stab = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
     uppercut = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
     slash = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
@@ -28,7 +27,6 @@ local AttackBlueprints = {
     phantom_step = {power = 40, type = "damage", targeting_style = "cycle_target"}, -- Range is dynamic (user's movement stat)
 
     -- Support Attacks
-    mend = {power = 40, type = "support", targeting_style = "directional_aim", affects = "allies"}, -- Power here represents heal amount
     invigorating_aura = {power = 0, type = "support", targeting_style = "cycle_target", range = 1, affects = "allies"},
 
     -- Status Attacks

@@ -63,13 +63,41 @@ local update_systems = {
 -- love.load() is called once when the game starts.
 -- It's used to initialize game variables and load assets.
 function love.load()
+    sti = require'libraries.sti' -- Load the Simple Tiled Implementation library for maps
     love.graphics.setDefaultFilter("nearest", "nearest") -- Ensures crisp scaling
 
     -- Load all game assets (images, animations, sounds)
     Assets.load()
 
+    -- Load the map specified in the config file.
+    local mapPath = "maps/" .. Config.CURRENT_MAP_NAME .. ".lua"
+
+    -- Add more specific checks to help diagnose loading issues.
+    if not love.filesystem.getInfo(mapPath) then
+        error("FATAL: Map file not found at '" .. mapPath .. "'. Please ensure the file exists in the 'maps' folder.")
+    end
+
+    -- This check is specific to DefaultMap.lua. If you change maps, you might need to update this.
+    if not love.filesystem.getInfo("maps/PokeTiles.png") then
+        error("FATAL: Tileset 'PokeTiles.png' not found in the 'maps' folder. The map '" .. Config.CURRENT_MAP_NAME .. "' requires it to load.")
+    end
+
+    -- Use pcall to safely load the map and get a detailed error message if it fails
+    local success, gameMap_or_error = pcall(sti, mapPath)
+    if not success then
+        error("FATAL: The map library 'sti' failed to load the map '" .. mapPath .. "'.\n" ..
+              "This can be caused by a syntax error in the .lua map file, or an issue with the tileset image.\n" ..
+              "Original error: " .. tostring(gameMap_or_error))
+    end
+    local gameMap = gameMap_or_error
+
+    -- Add a final check to ensure the map object is valid.
+    if not gameMap or not gameMap.width or not gameMap.tilewidth then
+        error("FATAL: Map loaded, but it is not a valid map object (missing width/tilewidth). File: '" .. mapPath .. "'.")
+    end
+
     -- The world must be created AFTER assets are loaded, so entities can get their sprites.
-    world = World.new()
+    world = World.new(gameMap)
 
     -- Load the custom font. Replace with your actual font file and its native size.
     -- For pixel fonts, using the intended size (e.g., 8, 16) is crucial for sharpness.

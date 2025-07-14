@@ -28,7 +28,10 @@ local function find_adjacent_open_tiles(target, world)
     }
     for _, move in ipairs(neighbors) do
         local checkX, checkY = target.tileX + move.dx, target.tileY + move.dy
-        if not WorldQueries.isTileOccupied(checkX, checkY, nil, world) then
+        -- Check if the tile is within map bounds AND is not occupied.
+        if checkX >= 0 and checkX < world.map.width and
+           checkY >= 0 and checkY < world.map.height and
+           not WorldQueries.isTileOccupied(checkX, checkY, nil, world) then
             table.insert(openTiles, {tileX = checkX, tileY = checkY})
         end
     end
@@ -49,14 +52,6 @@ local function check_and_trigger_aetherfall(airborne_target, reacting_team_type,
         if canReact then
             local openTiles = find_adjacent_open_tiles(airborne_target, world)
             if #openTiles > 0 then
-                -- Take control of the airborne status to prevent it from timing out during the wait.
-                if airborne_target.statusEffects and airborne_target.statusEffects.airborne then
-                    -- Set the duration to the peak of the animation (1s into a 2s effect)
-                    -- and add a flag to prevent the timer system from ticking it down.
-                    airborne_target.statusEffects.airborne.duration = 1
-                    airborne_target.statusEffects.airborne.aetherfall_controlled = true
-                end
-
                 -- Trigger the attack!
                 reactor.components.aetherfall_attack = {
                     target = airborne_target,

@@ -33,8 +33,8 @@ function Camera.update(dt, world)
     end
 
     -- 3. Clamp the target position to the map boundaries to prevent showing the void.
-    local mapPixelWidth = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE
-    local mapPixelHeight = Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
+    local mapPixelWidth = world.map.width * world.map.tilewidth
+    local mapPixelHeight = world.map.height * world.map.tileheight
     targetX = math.max(0, math.min(targetX, mapPixelWidth - Config.VIRTUAL_WIDTH))
     targetY = math.max(0, math.min(targetY, mapPixelHeight - Config.VIRTUAL_HEIGHT))
 

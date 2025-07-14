@@ -1,27 +1,41 @@
 -- world_queries.lua
 -- Contains functions for querying the state of the game world, like collision checks.
 
-local Geometry = require("modules.geometry")
 local Grid = require("modules.grid")
 local AttackPatterns = require("modules.attack_patterns")
 local AttackBlueprints = require("data.attack_blueprints")
 
 local WorldQueries = {}
-function WorldQueries.isTileOccupied(tileX, tileY, excludeSquare, world)
-    -- Check for the Sylvan Spire flag first.
-    if world.flag and world.flag.tileX == tileX and world.flag.tileY == tileY then
-        return true
-    end
 
+function WorldQueries.isTileAnObstacle(tileX, tileY, world)
+    for _, obstacle in ipairs(world.obstacles) do
+        -- Obstacles are defined by their top-left tile and their pixel dimensions.
+        -- We can check if the queried tile falls within the obstacle's bounding box.
+        local objStartTileX, objStartTileY = obstacle.tileX, obstacle.tileY
+        -- Calculate end tiles based on pixel dimensions.
+        local objEndTileX, objEndTileY = Grid.toTile(obstacle.x + obstacle.width - 1, obstacle.y + obstacle.height - 1)
+ 
+        if tileX >= objStartTileX and tileX <= objEndTileX and tileY >= objStartTileY and tileY <= objEndTileY then
+            return true
+        end
+    end
+    return false
+end
+
+function WorldQueries.getUnitAt(tileX, tileY, excludeSquare, world)
     for _, s in ipairs(world.all_entities) do
         -- Only check against players and enemies, not projectiles etc.
         if (s.type == "player" or s.type == "enemy") and s ~= excludeSquare and s.hp > 0 then
             if s.tileX == tileX and s.tileY == tileY then
-                return true
+                return s
             end
         end
     end
-    return false
+    return nil
+end
+
+function WorldQueries.isTileOccupied(tileX, tileY, excludeSquare, world)
+    return WorldQueries.isTileAnObstacle(tileX, tileY, world) or (WorldQueries.getUnitAt(tileX, tileY, excludeSquare, world) ~= nil)
 end
 
 function WorldQueries.isTileOccupiedBySameTeam(tileX, tileY, originalSquare, world)
@@ -89,9 +103,11 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
             for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
         end
 
-        -- Special case for hookshot: also allow targeting the flag
-        if attackName == "hookshot" and world.flag then
-            table.insert(potentialTargets, world.flag)
+        -- Special case for hookshot: also allow targeting any obstacle.
+        if attackName == "hookshot" then
+            for _, obstacle in ipairs(world.obstacles) do
+                table.insert(potentialTargets, obstacle)
+            end
         end
 
         -- Determine range
@@ -176,7 +192,7 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
         local directions = {"up", "down", "left", "right"}
         for _, dir in ipairs(directions) do
             tempAttacker.lastDirection = dir
-            local effects = patternFunc(tempAttacker)
+            local effects = patternFunc(tempAttacker, world)
             for _, effectData in ipairs(effects) do
                 local s = effectData.shape
                 local startTileX, startTileY = Grid.toTile(s.x, s.y)

@@ -6,9 +6,9 @@ local Grid = require("modules.grid")
 
 -- Creates a rectangular pattern from the entity to the edge of the screen.
 -- Used by archers, Venusaur Square, etc.
-function AttackPatterns.line_of_sight(entity)
+function AttackPatterns.line_of_sight(entity, world)
     local sx, sy, size = entity.x, entity.y, entity.size
-    local mapWidth, mapHeight = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE, Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
+    local mapWidth, mapHeight = world.map.width * world.map.tilewidth, world.map.height * world.map.tileheight
     local attackOriginX, attackOriginY, attackWidth, attackHeight
 
     if entity.lastDirection == "up" then
@@ -39,22 +39,6 @@ function AttackPatterns.ripple(centerX, centerY, rippleCenterSize)
         {shape = {type = "rect", x = centerX - size3 / 2, y = centerY - size3 / 2, w = size3, h = size3}, delay = Config.FLASH_DURATION * 2},
     }
 end
-
-function AttackPatterns.viscous_strike(square)
-    local attackOriginX, attackOriginY, attackWidth, attackHeight
-    if square.lastDirection == "up" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = square.x - Config.SQUARE_SIZE, square.y - (Config.SQUARE_SIZE * 2), Config.SQUARE_SIZE * 3, Config.SQUARE_SIZE * 2
-    elseif square.lastDirection == "down" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = square.x - Config.SQUARE_SIZE, square.y + Config.SQUARE_SIZE, Config.SQUARE_SIZE * 3, Config.SQUARE_SIZE * 2
-    elseif square.lastDirection == "left" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = square.x - (Config.SQUARE_SIZE * 2), square.y - Config.SQUARE_SIZE, Config.SQUARE_SIZE * 2, Config.SQUARE_SIZE * 3
-    elseif square.lastDirection == "right" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = square.x + Config.SQUARE_SIZE, square.y - Config.SQUARE_SIZE, Config.SQUARE_SIZE * 2, Config.SQUARE_SIZE * 3
-    end
-    return {{shape = {type = "rect", x = attackOriginX, y = attackOriginY, w = attackWidth, h = attackHeight}, delay = 0}}
-end
-
-AttackPatterns.mend = AttackPatterns.viscous_strike  
 
 AttackPatterns.fireball = AttackPatterns.line_of_sight -- Alias for projectile attack
 

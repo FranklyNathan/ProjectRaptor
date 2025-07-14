@@ -6,17 +6,6 @@ local EffectFactory = require("modules.effect_factory")
 
 local ProjectileSystem = {}
 
--- Helper to check for a permanent object at a tile
-local function isTilePermanent(tileX, tileY, world)
-    if world.flag and world.flag.tileX == tileX and world.flag.tileY == tileY then
-        -- The flag is considered a permanent, solid object.
-        if world.flag.weight == "Permanent" then
-            return true
-        end
-    end
-    return false
-end
-
 function ProjectileSystem.update(dt, world)
     -- Iterate backwards to safely remove projectiles
     for i = #world.projectiles, 1, -1 do
@@ -32,12 +21,22 @@ function ProjectileSystem.update(dt, world)
             local currentTileX, currentTileY = Grid.toTile(p.x, p.y)
 
             -- Check for map boundary collision
-            if currentTileX < 0 or currentTileX >= Config.MAP_WIDTH_TILES or
-               currentTileY < 0 or currentTileY >= Config.MAP_HEIGHT_TILES then
+            if currentTileX < 0 or currentTileX >= world.map.width or
+               currentTileY < 0 or currentTileY >= world.map.height then
                 p.isMarkedForDeletion = true
             else
-                -- Check for collision with a permanent object (like Sceptile's flag)
-                if isTilePermanent(currentTileX, currentTileY, world) then
+                -- Check for collision with an obstacle.
+                local hitObstacle = false
+                for _, obstacle in ipairs(world.obstacles) do
+                    local obsStartX, obsStartY = obstacle.tileX, obstacle.tileY
+                    local obsEndX, obsEndY = Grid.toTile(obstacle.x + obstacle.width - 1, obstacle.y + obstacle.height - 1)
+                    if currentTileX >= obsStartX and currentTileX <= obsEndX and currentTileY >= obsStartY and currentTileY <= obsEndY then
+                        hitObstacle = true
+                        break
+                    end
+                end
+
+                if hitObstacle then
                     p.isMarkedForDeletion = true
                 else
                     -- Check for collision with units

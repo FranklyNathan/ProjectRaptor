@@ -94,7 +94,7 @@ function RangeCalculator.calculateAttackableTiles(unit, world, reachableTiles)
                                     if manhattanDist >= minRange and manhattanDist <= range then
                                         local attackTileX, attackTileY = tileX + dx, tileY + dy
                                         -- Check map bounds before adding.
-                                        if attackTileX >= 0 and attackTileX < Config.MAP_WIDTH_TILES and attackTileY >= 0 and attackTileY < Config.MAP_HEIGHT_TILES then
+                                        if attackTileX >= 0 and attackTileX < world.map.width and attackTileY >= 0 and attackTileY < world.map.height then
                                             attackableTiles[attackTileX .. "," .. attackTileY] = true
                                         end
                                     end

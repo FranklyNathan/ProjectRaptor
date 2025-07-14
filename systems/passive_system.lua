@@ -1,7 +1,6 @@
 -- passive_system.lua
 -- Manages team-wide passive abilities.
 
-local Geometry = require("modules.geometry")
 local EffectFactory = require("modules.effect_factory")
 local CharacterBlueprints = require("data.character_blueprints")
 local EnemyBlueprints = require("data.enemy_blueprints")
