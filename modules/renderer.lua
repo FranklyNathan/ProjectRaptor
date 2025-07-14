@@ -414,6 +414,29 @@ local function draw_world_space_ui(world)
                                 love.graphics.rectangle("fill", pixelX + BORDER_WIDTH, pixelY + BORDER_WIDTH, INSET_SIZE, INSET_SIZE)
                             end
                         end
+                    elseif world.selectedAttackName == "fireball" then
+                        -- Draw a red line preview for the piercing shot
+                        love.graphics.setColor(1, 0.2, 0.2, 0.3) -- Semi-transparent red
+
+                        local dx = target.tileX - attacker.tileX
+                        local dy = target.tileY - attacker.tileY
+
+                        local direction
+                        if math.abs(dx) > math.abs(dy) then
+                            direction = (dx > 0) and "right" or "left"
+                        else
+                            direction = (dy > 0) and "down" or "up"
+                        end
+
+                        local currentTileX, currentTileY = attacker.tileX, attacker.tileY
+                        -- Loop until we go off the map
+                        while true do
+                            local nextX, nextY = Grid.getDestination(currentTileX, currentTileY, direction, 1)
+                            if nextX < 0 or nextX >= world.map.width or nextY < 0 or nextY >= world.map.height then break end
+                            local pixelX, pixelY = Grid.toPixels(nextX, nextY)
+                            love.graphics.rectangle("fill", pixelX + BORDER_WIDTH, pixelY + BORDER_WIDTH, INSET_SIZE, INSET_SIZE)
+                            currentTileX, currentTileY = nextX, nextY
+                        end
                     end
                 end
             end
@@ -503,44 +526,6 @@ local function draw_party_select_ui(world)
     end
 end
 
--- Draws debug and status information that is not part of a specific menu.
--- This restores the info text that was present in the old renderer.
-local function draw_debug_info(world)
-    love.graphics.setColor(1, 1, 1, 1) -- Reset color to white for text
-
-    -- Instructions (Top-Left, below the action menu)
-    local instructions = {
-        "CONTROLS:",
-        "WASD: Move Cursor",
-        "J: Select / Confirm",
-        "K: Cancel / Back",
-        "Esc: Party Menu"
-    }
-    local yPos = 10
-    for _, line in ipairs(instructions) do
-        love.graphics.print(line, 10, yPos)
-        yPos = yPos + 20
-    end
-
-    -- Player Stats (Below Instructions)
-    local yOffset = yPos -- Start right after instructions
-    for i, p in ipairs(world.players) do
-        local statsText = string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d X=%d Y=%d", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0, p.tileX, p.tileY)
-        love.graphics.print(statsText, 10, yOffset)
-        yOffset = yOffset + 20
-    end
-
-    -- Enemy Stats (Below Player Stats)
-    yOffset = yOffset + 10 -- Add some space
-    love.graphics.print("Enemies:", 10, yOffset)
-    yOffset = yOffset + 20
-    for i, e in ipairs(world.enemies) do
-        local statsText = string.format("E%d (%s): HP=%d/%d X=%d Y=%d", i, e.enemyType, e.hp, e.maxHp, e.tileX, e.tileY)
-        love.graphics.print(statsText, 10, yOffset)
-        yOffset = yOffset + 20
-    end
-end
-
 local function draw_screen_space_ui(world)
     -- Draw Action Menu
     if world.actionMenu.active then
@@ -554,12 +539,12 @@ local function draw_screen_space_ui(world)
         local font = love.graphics.getFont()
 
         -- Dynamically calculate menu width based on the longest option text
-        local maxTextWidth = font:getWidth("Actions") -- Start with title width
+        local maxTextWidth = 0 -- No title, so start with 0
         for _, option in ipairs(menu.options) do
             maxTextWidth = math.max(maxTextWidth, font:getWidth(option.text))
         end
         local menuWidth = maxTextWidth + 20 -- 10px padding on each side
-        local menuHeight = 25 + #menu.options * 20
+        local menuHeight = 10 + #menu.options * 20 -- 5px padding top and bottom
         local menuX = screenUnitX + unit.size + 5 -- Position it to the right of the unit
         local menuY = screenUnitY
 
@@ -577,12 +562,9 @@ local function draw_screen_space_ui(world)
         love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight)
         love.graphics.setLineWidth(1)
 
-        -- Draw menu title
-        love.graphics.printf("Actions", menuX, menuY + 5, menuWidth, "center")
-
         -- Draw menu options
         for i, option in ipairs(menu.options) do
-            local yPos = menuY + 25 + (i - 1) * 20
+            local yPos = menuY + 5 + (i - 1) * 20
             local attackData = AttackBlueprints[option.key]
 
             -- Check if an attack option is invalid (has no valid targets)
@@ -680,7 +662,6 @@ function Renderer.draw(world)
     -- 4. Draw screen-space UI based on the current game state
     if world.gameState == "gameplay" then
         draw_screen_space_ui(world)
-        draw_debug_info(world)
     elseif world.gameState == "party_select" then
         draw_party_select_ui(world)
     end

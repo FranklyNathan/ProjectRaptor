@@ -88,10 +88,25 @@ UnitAttacks.longshot = function(attacker, power, world)
 end
 
 UnitAttacks.fireball = function(attacker, power, world)
+    -- 1. Get the selected target from the cycle targeting system.
+    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
+        return false -- Failsafe
+    end
+    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
+
+    -- 2. Make the attacker face the target.
+    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
+    if math.abs(dx) > math.abs(dy) then
+        attacker.lastDirection = (dx > 0) and "right" or "left"
+    else
+        attacker.lastDirection = (dy > 0) and "down" or "up"
+    end
+
+    -- 3. Fire a piercing projectile in that direction.
     local isEnemy = (attacker.type == "enemy")
-    -- The last argument (true) sets the projectile to be piercing.
-    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil, true)
+    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil, true) -- piercing = true
     world:queue_add_entity(newProjectile)
+    return true
 end
 
 UnitAttacks.venom_stab = function(attacker, power, world)

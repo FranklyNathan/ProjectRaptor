@@ -40,6 +40,4 @@ function AttackPatterns.ripple(centerX, centerY, rippleCenterSize)
     }
 end
 
-AttackPatterns.fireball = AttackPatterns.line_of_sight -- Alias for projectile attack
-
 return AttackPatterns

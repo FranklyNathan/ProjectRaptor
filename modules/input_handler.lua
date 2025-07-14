@@ -446,6 +446,22 @@ local stateHandlers = {}
 stateHandlers.gameplay = function(key, world)
     if world.turn ~= "player" then return end -- Only accept input on the player's turn
 
+    -- Handle cursor movement for states that allow it. This is for single key taps.
+    if world.playerTurnState == "free_roam" or world.playerTurnState == "unit_selected" then
+        if key == "w" then move_cursor(0, -1, world)
+        elseif key == "s" then move_cursor(0, 1, world)
+        elseif key == "a" then move_cursor(-1, 0, world)
+        elseif key == "d" then move_cursor(1, 0, world)
+        end
+    elseif world.playerTurnState == "ground_aiming" then
+        -- Ground aiming has its own cursor movement logic with different bounds.
+        if key == "w" then move_ground_aim_cursor(0, -1, world)
+        elseif key == "s" then move_ground_aim_cursor(0, 1, world)
+        elseif key == "a" then move_ground_aim_cursor(-1, 0, world)
+        elseif key == "d" then move_ground_aim_cursor(1, 0, world)
+        end
+    end
+
     -- Delegate to the correct handler based on the player's current action.
     if world.playerTurnState == "free_roam" then
         handle_free_roam_input(key, world)
@@ -592,12 +608,8 @@ function InputHandler.handle_continuous_input(dt, world)
     -- Only process if there is a direction to move.
     if dx ~= 0 or dy ~= 0 then
         if keyString ~= cursor.activeKey then
-            -- A new key is pressed. Move immediately and set the initial delay.
-            if world.playerTurnState == "ground_aiming" then
-                move_ground_aim_cursor(dx, dy, world)
-            else
-                move_cursor(dx, dy, world)
-            end
+            -- A new key is pressed. Don't move immediately (that's handled by handle_key_press).
+            -- Just set the state and the timer for the *first repeat*.
             cursor.activeKey = keyString
             cursor.timer = cursor.initialDelay
         else

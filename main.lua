@@ -27,7 +27,7 @@ local DeathSystem = require("systems.death_system")
 local Renderer = require("modules/renderer")
 local CombatActions = require("modules/combat_actions")
 local EventBus = require("modules/event_bus")
-local Camera = require("modules/camera")
+local Camera = require("modules.camera")
 local InputHandler = require("modules/input_handler")
 
 world = nil -- Will be initialized in love.load after assets are loaded
@@ -139,13 +139,15 @@ end
 -- It's used for game logic, such as updating player positions and attacks.
 function love.update(dt)
     -- Only update game logic if not paused
-    print("[DEBUG] love.update called. Game state: " .. world.gameState)
     if world.gameState == "gameplay" then
         -- Handle continuous input for things like holding down keys for cursor movement.
         InputHandler.handle_continuous_input(dt, world)
 
         -- Update the camera position based on the cursor
         Camera.update(dt, world)
+
+        -- Update the map (for animated tiles, etc.). This is a crucial step for the 'sti' library.
+        world.map:update(dt)
 
         -- Main system update loop
         for _, system in ipairs(update_systems) do

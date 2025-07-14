@@ -132,8 +132,8 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
             if canBeTargeted then
                 local dist = math.abs(attacker.tileX - target.tileX) + math.abs(attacker.tileY - target.tileY)
                 if dist >= minRange and dist <= range then
-                    -- Special validation for hookshot (must be in a straight, unblocked line)
-                    if attackName == "hookshot" then
+                    -- Special validation for line-of-sight attacks (must be in a straight, unblocked line)
+                    if attackData.line_of_sight_only then
                         local isStraightLine = (attacker.tileX == target.tileX or attacker.tileY == target.tileY)
                         if isStraightLine then
                             local isBlocked = false

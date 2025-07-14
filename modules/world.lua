@@ -2,6 +2,7 @@
 -- The World object is the single source of truth for all entity data and collections.
 
 local EventBus = require("modules.event_bus")
+local Camera = require("modules.camera")
 local Assets = require("modules.assets")
 local Grid = require("modules.grid")
 local EntityFactory = require("data.entities")
@@ -149,6 +150,32 @@ function World.new(gameMap)
             -- Add the obstacle to all relevant entity lists so it's recognized by all game systems.
             self:queue_add_entity(obstacle)
         end
+    end
+
+    -- Set the initial camera position based on a "CameraStart" object in the map.
+    -- If not found, it will default to (0,0) and pan to the first player.
+    local cameraStartX, cameraStartY = nil, nil
+    -- Search for the camera start object in any object layer.
+    for _, layer in ipairs(self.map.layers) do
+        if layer.type == "objectgroup" and layer.objects then
+            for _, obj in ipairs(layer.objects) do
+                if obj.name == "CameraStart" then
+                    -- Center the camera on this object's position.
+                    cameraStartX = obj.x - (Config.VIRTUAL_WIDTH / 2)
+                    cameraStartY = obj.y - (Config.VIRTUAL_HEIGHT / 2)
+                    break -- Found it, no need to search further.
+                end
+            end
+        end
+        if cameraStartX then break end -- Exit outer loop too
+    end
+
+    if cameraStartX and cameraStartY then
+        -- Clamp the initial camera position to the map boundaries.
+        local mapPixelWidth = self.map.width * self.map.tilewidth
+        local mapPixelHeight = self.map.height * self.map.tileheight
+        Camera.x = math.max(0, math.min(cameraStartX, mapPixelWidth - Config.VIRTUAL_WIDTH))
+        Camera.y = math.max(0, math.min(cameraStartY, mapPixelHeight - Config.VIRTUAL_HEIGHT))
     end
 
     -- Manually initialize start-of-turn positions for the very first turn.

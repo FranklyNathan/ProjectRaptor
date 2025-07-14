@@ -20,7 +20,7 @@ function Camera.update(dt, world)
     local targetX, targetY = Camera.x, Camera.y
 
     -- 2. Define a margin for edge-scrolling. The camera will move when the cursor enters this area.
-    local scrollMargin = 3 * Config.SQUARE_SIZE -- 3 tiles from the edge
+    local scrollMargin = 0 -- Scroll only when the cursor is at the very edge of the screen.
 
     -- Get map dimensions in pixels to check against boundaries.
     local mapPixelWidth = world.map.width * world.map.tilewidth
@@ -47,14 +47,25 @@ function Camera.update(dt, world)
         targetY = cursorPixelY + cursorSize - (Config.VIRTUAL_HEIGHT - scrollMargin)
     end
 
-    -- 4. Smoothly move the camera towards the target position.
+    -- 4. Clamp the TARGET position to the map boundaries. This ensures the camera
+    -- never tries to move towards a point outside the map, allowing the lerp
+    -- to function correctly at the edges.
+    targetX = math.max(0, math.min(targetX, mapPixelWidth - Config.VIRTUAL_WIDTH))
+    targetY = math.max(0, math.min(targetY, mapPixelHeight - Config.VIRTUAL_HEIGHT))
+
+    -- 5. Smoothly move the camera towards the (now clamped) target position.
     local lerpFactor = 0.2 -- A higher value makes the camera "snappier".
     Camera.x = Camera.x + (targetX - Camera.x) * lerpFactor
     Camera.y = Camera.y + (targetY - Camera.y) * lerpFactor
+    
+    -- Snap to the target position if the camera is very close. This prevents the
+    -- camera from having tiny decimal values when it should be stationary, and
+    -- ensures it can reach its final destination perfectly. This fixes the "sticking"
+    -- at the edge of the screen.
+    local snapThreshold = 0.5 -- Snap if within half a pixel.
+    if math.abs(targetX - Camera.x) < snapThreshold then Camera.x = targetX end
+    if math.abs(targetY - Camera.y) < snapThreshold then Camera.y = targetY end
 
-    -- 5. Clamp the camera's final position to the map boundaries to prevent showing the void.
-    Camera.x = math.max(0, math.min(Camera.x, mapPixelWidth - Config.VIRTUAL_WIDTH))
-    Camera.y = math.max(0, math.min(Camera.y, mapPixelHeight - Config.VIRTUAL_HEIGHT))
 end
 
 -- Applies the camera's transformation to the graphics stack.

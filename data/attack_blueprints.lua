@@ -19,7 +19,7 @@ local AttackBlueprints = {
     slash = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
 
     -- Damaging Ranged Attacks
-    fireball = {power = 20, type = "damage", targeting_style = "directional_aim"},
+    fireball = {power = 20, type = "damage", targeting_style = "cycle_target", range = 99, affects = "enemies", line_of_sight_only = true},
     longshot = {power = 20, type = "damage", targeting_style = "cycle_target", range = 3, min_range = 3},
     eruption = {power = 20, type = "damage", targeting_style = "ground_aim", range = 7},
 
@@ -39,7 +39,7 @@ local AttackBlueprints = {
     sylvan_spire = {power = 0, type = "utility", targeting_style = "ground_aim", range = 6},
 
     -- Shared Attacks
-    hookshot = {power = 30, type = "damage", targeting_style = "cycle_target", range = 7, affects = "all"},
+    hookshot = {power = 30, type = "damage", targeting_style = "cycle_target", range = 7, affects = "all", line_of_sight_only = true},
 
 }
 
