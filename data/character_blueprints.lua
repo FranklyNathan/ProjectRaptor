@@ -9,10 +9,10 @@ local CharacterBlueprints = {
         maxHp = 120,
         attackStat = 50,
         defenseStat = 50,
-        passive = "drapion_action_on_kill",
         movement = 7,
         weight = 8, -- Heavy
         dominantColor = {0.5, 0.2, 0.8}, -- Drapion: Purple
+        passives = {"Bloodrush"},
         attacks = {
             "viscous_strike", "venom_stab", "phantom_step"
         }
@@ -22,10 +22,10 @@ local CharacterBlueprints = {
         maxHp = 100,
         attackStat = 40,
         defenseStat = 50,
-        passive = "florges_regen",
         movement = 5,
         weight = 3, -- Light
         dominantColor = {1.0, 0.6, 0.8}, -- Florges: Light Florges
+        passives = {"HealingWinds"},
         attacks = {
             "mend", "invigorating_aura"
         }
@@ -35,10 +35,10 @@ local CharacterBlueprints = {
         maxHp = 60,
         attackStat = 60,
         defenseStat = 50,
-        passive = "venusaur_crit_bonus",
         movement = 5,
         weight = 9, -- Very Heavy
         dominantColor = {0.6, 0.9, 0.6}, -- Venusaur: Pale Green
+        passives = {},
         attacks = {
             "fireball", "eruption", "shockwave"
         }
@@ -51,7 +51,7 @@ local CharacterBlueprints = {
         movement = 4,
         weight = 10, -- Heaviest
         dominantColor = {0.6, 0.6, 0.7}, -- Magnezone: Steel Grey
-        -- No team-wide passive, but has unique attack mechanics
+        passives = {},
         attacks = {
             "slash"
         }
@@ -61,10 +61,10 @@ local CharacterBlueprints = {
         maxHp = 100,
         attackStat = 50,
         defenseStat = 50,
-        passive = "electivire_passive_placeholder", -- Comet damage was removed
         movement = 6,
         weight = 7, -- Medium-Heavy
         dominantColor = {1.0, 0.8, 0.1}, -- Electivire: Electric Venusaur
+        passives = {},
         attacks = {
             "uppercut", "quick_step", "longshot"
         }
@@ -74,10 +74,10 @@ local CharacterBlueprints = {
         maxHp = 101,
         attackStat = 50,
         defenseStat = 50,
-        passive = "tangrowth_careen_double",
         movement = 4,
         weight = 9, -- Very Heavy
         dominantColor = {0.1, 0.3, 0.8}, -- Tangrowth: Dark Blue
+        passives = {"Whiplash"},
         attacks = {
             "hookshot"
         }
@@ -87,10 +87,10 @@ local CharacterBlueprints = {
         maxHp = 110,
         attackStat = 50,
         defenseStat = 50,
-        passive = "sceptile_speed_boost",
         movement = 8,
         weight = 6, -- Medium
         dominantColor = {0.1, 0.8, 0.3}, -- Sceptile: Leaf Green
+        passives = {},
         attacks = {
         "slash", "sylvan_spire", "hookshot"
         }
@@ -100,13 +100,13 @@ local CharacterBlueprints = {
         maxHp = 90,
         attackStat = 50,
         defenseStat = 50,
-        passive = "pidgeot_passive_placeholder", -- To be implemented
         movement = 9,
         weight = 5, -- Medium-Light
         isFlying = true,
         dominantColor = {0.8, 0.7, 0.4}, -- Pidgeot: Sandy Brown
+        passives = {"Aetherfall"},
         attacks = {
-            "slash","aetherfall"
+            "slash"
         }
     }
 }

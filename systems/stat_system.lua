@@ -20,9 +20,6 @@ function StatSystem.update(dt, world)
         -- Calculate final movement speed
         if entity.speed then
             entity.finalSpeed = entity.speed -- Start with base speed
-            if entity.type == "player" and world.passives.sceptileSpeedBoost then
-                entity.finalSpeed = entity.finalSpeed * 1.10
-            end
         end
     end
 end

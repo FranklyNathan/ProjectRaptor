@@ -17,12 +17,12 @@ local StatSystem = require("systems.stat_system")
 local EffectTimerSystem = require("systems.effect_timer_system")
 local ProjectileSystem = require("systems.projectile_system")
 local MovementSystem = require("systems/movement_system")
-local EnemyTurnSystem = require("systems.enemy_turn_system")
+local EnemyTurnSystem = require("systems/enemy_turn_system")
 local TurnBasedMovementSystem = require("systems/turn_based_movement_system")
 local PassiveSystem = require("systems.passive_system")
 local AttackResolutionSystem = require("systems.attack_resolution_system")
+local AetherfallSystem = require("systems.aetherfall_system")
 local GrappleHookSystem = require("systems/grapple_hook_system")
-local PidgeotSystem = require("systems/pidgeot_system")
 local DeathSystem = require("systems.death_system")
 local Renderer = require("modules/renderer")
 local CombatActions = require("modules/combat_actions")
@@ -53,8 +53,8 @@ local update_systems = {
     -- 4. Update ongoing effects of actions
     ProjectileSystem,
     GrappleHookSystem,
-    PidgeotSystem,
     CareeningSystem,
+    AetherfallSystem,
     -- 5. Resolve the consequences of actions
     AttackResolutionSystem,
     DeathSystem
@@ -84,21 +84,21 @@ function love.load()
     EffectFactory.init(world)
 
     -- Register global event listeners
-    EventBus:register("enemy_died", function(data)
-        -- This handles Drapion's passive ability.
-        if world.passives.drapionActive then
-            -- Find the Drapion unit and refresh its action for the turn.
-            for _, p in ipairs(world.players) do
-                if p.playerType == "drapionsquare" and p.hp > 0 then
-                    p.hasActed = false
-                    EffectFactory.createDamagePopup(p, "Refreshed!", false, {0.5, 1, 0.5, 1}) -- Green text
+    EventBus:register("unit_died", function(data)
+        local victim, killer = data.victim, data.killer
+        if not victim or not killer then return end
+
+        -- This handles the "Bloodrush" passive. Check if the list of living providers is not empty.
+        if #world.teamPassives[killer.type].Bloodrush > 0 then
+            -- If the killer's team has Bloodrush and they killed an opponent, refresh the killer's action.
+            if killer.type ~= victim.type then
+                if killer.hp > 0 then
+                    killer.hasActed = false
+                    EffectFactory.createDamagePopup(killer, "Refreshed!", false, {0.5, 1, 0.5, 1}) -- Green text
                 end
             end
         end
     end)
-
-    -- Create enemy squares (light grey)
-    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
 
     -- Set the background color
     love.graphics.setBackgroundColor(0.1, 0.1, 0.1, 1) -- Dark grey

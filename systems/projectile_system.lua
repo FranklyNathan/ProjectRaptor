@@ -1,61 +1,64 @@
 -- projectile_system.lua
--- This system is responsible for updating all projectile entities.
+-- Handles the movement and collision logic for all projectiles.
 
-local CombatFormulas = require("modules.combat_formulas")
-local CombatActions = require("modules.combat_actions")
-local EffectFactory = require("modules.effect_factory")
 local Grid = require("modules.grid")
+local EffectFactory = require("modules.effect_factory")
 
 local ProjectileSystem = {}
 
+-- Helper to check for a permanent object at a tile
+local function isTilePermanent(tileX, tileY, world)
+    if world.flag and world.flag.tileX == tileX and world.flag.tileY == tileY then
+        -- The flag is considered a permanent, solid object.
+        if world.flag.weight == "Permanent" then
+            return true
+        end
+    end
+    return false
+end
+
 function ProjectileSystem.update(dt, world)
-    local mapWidth, mapHeight = Config.MAP_WIDTH_TILES * Config.SQUARE_SIZE, Config.MAP_HEIGHT_TILES * Config.SQUARE_SIZE
-    local venusaurSquareCritBonus = world.passives.venusaurCritBonus
+    -- Iterate backwards to safely remove projectiles
+    for i = #world.projectiles, 1, -1 do
+        local p = world.projectiles[i]
+        local projComp = p.components.projectile
 
-    for _, entity in ipairs(world.projectiles) do
-        if entity.components and entity.components.projectile then
-            local proj = entity.components.projectile
-            local beamMoved = false
+        projComp.timer = projComp.timer - dt
+        if projComp.timer <= 0 then
+            projComp.timer = projComp.timer + projComp.moveDelay
 
-            -- Advance beam position
-            proj.timer = proj.timer - dt
-            if proj.timer <= 0 then
-                if proj.direction == "up" then entity.y = entity.y - proj.moveStep
-                elseif proj.direction == "down" then entity.y = entity.y + proj.moveStep
-                elseif proj.direction == "left" then entity.x = entity.x - proj.moveStep
-                elseif proj.direction == "right" then entity.x = entity.x + proj.moveStep
-                end
-                proj.timer = proj.moveDelay -- Reset timer for next step
-                beamMoved = true
-            end
+            -- Move the projectile one step
+            p.x, p.y = Grid.getDestination(p.x, p.y, projComp.direction, projComp.moveStep)
+            local currentTileX, currentTileY = Grid.toTile(p.x, p.y)
 
-            -- Check for collision if beam moved
-            if beamMoved then
-                local beamHit = false
-                local targets = proj.isEnemyProjectile and world.players or world.enemies
-                -- Get the projectile's current tile position
-                local projTileX, projTileY = Grid.toTile(entity.x, entity.y)
+            -- Check for map boundary collision
+            if currentTileX < 0 or currentTileX >= Config.MAP_WIDTH_TILES or
+               currentTileY < 0 or currentTileY >= Config.MAP_HEIGHT_TILES then
+                p.isMarkedForDeletion = true
+            else
+                -- Check for collision with a permanent object (like Sceptile's flag)
+                if isTilePermanent(currentTileX, currentTileY, world) then
+                    p.isMarkedForDeletion = true
+                else
+                    -- Check for collision with units
+                    local targetType = projComp.isEnemyProjectile and "player" or "enemy"
+                    local targets = (targetType == "player") and world.players or world.enemies
 
-                for _, target in ipairs(targets) do
-                    -- Check for collision based on tile coordinates
-                    if target.tileX == projTileX and target.tileY == projTileY and target.hp > 0 then
-                        local totalBonusCrit = (proj.attacker.type == "player" and venusaurSquareCritBonus or 0)
-                        local damage, isCrit = CombatFormulas.calculateFinalDamage(proj.attacker, target, proj.power, totalBonusCrit)
-                        -- Directly apply damage, no need for the old collision check function
-                        CombatActions.applyDirectDamage(target, damage, isCrit)
-                        beamHit = true
-                        EffectFactory.addAttackEffect(entity.x, entity.y, entity.size, entity.size, {1, 0, 0, 1}, 0, proj.attacker, 0, false, target.type)
-                        if proj.statusEffect then
-                            CombatActions.applyStatusEffect(target, proj.statusEffect)
+                    for _, target in ipairs(targets) do
+                        if target.hp > 0 and not projComp.hitTargets[target] and target.tileX == currentTileX and target.tileY == currentTileY then
+                            -- Collision detected! Create an attack effect to deal damage.
+                            EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0.5, 0, 1}, 0, projComp.attacker, projComp.power, false, targetType, nil, projComp.statusEffect)
+
+                            -- Mark target as hit to prevent re-hitting
+                            projComp.hitTargets[target] = true
+
+                            -- If the projectile is not piercing, destroy it.
+                            if not projComp.isPiercing then
+                                p.isMarkedForDeletion = true
+                                break -- Stop checking other targets for this projectile
+                            end
                         end
-                        break -- Stop checking other targets once one is hit
                     end
-                end
-
-                -- Remove beam if it hit a target or went off-screen
-                local beamOffScreen = entity.x < 0 or entity.x >= mapWidth or entity.y < 0 or entity.y >= mapHeight
-                if beamHit or beamOffScreen then
-                    entity.isMarkedForDeletion = true
                 end
             end
         end

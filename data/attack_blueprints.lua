@@ -43,9 +43,6 @@ local AttackBlueprints = {
     -- Shared Attacks
     hookshot = {power = 30, type = "damage", targeting_style = "cycle_target", range = 7, affects = "all"},
 
-    -- Pidgeot
-    aetherfall = {power = 20, type = "damage", targeting_style = "auto_hit_all"},
-
 }
 
 return AttackBlueprints

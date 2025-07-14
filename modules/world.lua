@@ -54,13 +54,22 @@ function World.new()
     self.cursorPos = {x = 1, y = 1}
     self.selectedSquare = nil
 
-    -- A table to hold the state of team-wide passives, calculated once per frame.
-    self.passives = {
-        venusaurCritBonus = 0,
-        florgesActive = false,
-        drapionActive = false,
-        tangrowthCareenDouble = false,
-        sceptileSpeedBoost = false
+    -- Holds the state of active passives for each team, calculated once per frame.
+    -- The boolean flags are set by the PassiveSystem and read by other systems.
+    self.teamPassives = {
+        player = {
+            Bloodrush = {},
+            HealingWinds = {},
+            Whiplash = {},
+            Aetherfall = {}
+        },
+        enemy = {
+            -- Enemies can also have team-wide passives.
+            Bloodrush = {},
+            HealingWinds = {},
+            Whiplash = {},
+            Aetherfall = {}
+        }
     }
 
     -- Define the full roster in a fixed order based on the asset load sequence.

@@ -38,7 +38,7 @@ function AttackResolutionSystem.update(dt, world)
                             end
                         else -- It's a damage effect
                             local damage, isCrit = CombatFormulas.calculateFinalDamage(effect.attacker, target, effect.power, effect.critChanceOverride)
-                            CombatActions.applyDirectDamage(target, damage, isCrit)
+                            CombatActions.applyDirectDamage(target, damage, isCrit, effect.attacker)
 
                             -- Handle status effects on successful hit.
                             if effect.statusEffect then

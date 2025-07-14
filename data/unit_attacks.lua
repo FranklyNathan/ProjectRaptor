@@ -45,8 +45,11 @@ UnitAttacks.slash = function(attacker, power, world)
         attacker.lastDirection = (dy > 0) and "down" or "up"
     end
 
+    -- Determine the correct target type based on the attacker's team.
+    local targetType = (attacker.type == "player") and "enemy" or "player"
+
     -- 3. Execute the attack effect directly on the target's tile.
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, "enemy")
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType)
     return true
 end
 
@@ -74,7 +77,8 @@ end
 
 UnitAttacks.fireball = function(attacker, power, world)
     local isEnemy = (attacker.type == "enemy")
-    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil)
+    -- The last argument (true) sets the projectile to be piercing.
+    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil, true)
     world:queue_add_entity(newProjectile)
 end
 
@@ -98,9 +102,12 @@ UnitAttacks.venom_stab = function(attacker, power, world)
         attacker.lastDirection = (dy > 0) and "down" or "up"
     end
 
+    -- Determine the correct target type based on the attacker's team.
+    local targetType = (attacker.type == "player") and "enemy" or "player"
+
     -- 3. Execute the attack on the target's tile with a poison status effect.
     local status = {type = "poison", duration = 3} -- Lasts 3 turns
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, "enemy", nil, status)
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType, nil, status)
     return true
 end
 
@@ -221,9 +228,12 @@ UnitAttacks.uppercut = function(attacker, power, world)
         attacker.lastDirection = (dy > 0) and "down" or "up"
     end
 
+    -- Determine the correct target type based on the attacker's team.
+    local targetType = (attacker.type == "player") and "enemy" or "player"
+
     -- 3. Execute the attack on the target's tile with an airborne status effect.
     local status = {type = "airborne"}
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, "enemy", nil, status)
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType, nil, status)
     return true
 end
 
@@ -252,7 +262,7 @@ UnitAttacks.quick_step = function(attacker, power, world)
 
             for _, enemy in ipairs(world.enemies) do
                 if enemy.tileX == pathTileX and enemy.tileY == pathTileY and enemy.hp > 0 then
-                    CombatActions.applyStatusEffect(enemy, {type = "airborne"})
+                    CombatActions.applyStatusEffect(enemy, {type = "airborne", attacker = attacker})
                 end
             end
         end
@@ -329,66 +339,6 @@ UnitAttacks.hookshot = function(attacker, power, world)
     local newHook = EntityFactory.createGrappleHook(attacker, power, range)
     world:queue_add_entity(newHook)
     return true
-end
-
-UnitAttacks.aetherfall = function(square, power, world)
-    -- This attack is complex and will be managed by a dedicated system.
-    -- This function's job is to find targets and initiate the attack state.
-
-    -- 1. Find all airborne enemies.
-    local airborneEnemies = {}
-    for _, enemy in ipairs(world.enemies) do
-        if enemy.hp > 0 and enemy.statusEffects.airborne then
-            table.insert(airborneEnemies, enemy)
-        end
-    end
-
-    if #airborneEnemies == 0 then return false end -- No valid targets, attack doesn't fire.
-
-    -- 2. Find the closest airborne enemy to Pidgeot.
-    local primaryTarget, shortestDistSq = nil, math.huge
-    for _, enemy in ipairs(airborneEnemies) do
-        local distSq = (enemy.x - square.x)^2 + (enemy.y - square.y)^2
-        if distSq < shortestDistSq then
-            shortestDistSq, primaryTarget = distSq, enemy
-        end
-    end
-
-    -- 3. Find other nearby airborne enemies (within 5 tiles).
-    local uniqueTargets = {primaryTarget}
-    local searchRadiusSq = (5 * Config.SQUARE_SIZE)^2
-    for _, enemy in ipairs(airborneEnemies) do
-        if enemy ~= primaryTarget and #uniqueTargets < 3 then
-            local distSq = (enemy.x - primaryTarget.x)^2 + (enemy.y - primaryTarget.y)^2
-            if distSq <= searchRadiusSq then
-                table.insert(uniqueTargets, enemy)
-            end
-        end
-    end
-
-    -- 4. Build the final target list for the attack sequence.
-    local finalTargets = {}
-    if #uniqueTargets == 1 then
-        -- If there's only one target, hit it 3 times.
-        finalTargets = {uniqueTargets[1], uniqueTargets[1], uniqueTargets[1]}
-    else
-        -- If multiple targets, hit each one once.
-        finalTargets = uniqueTargets
-    end
-
-    -- 5. Initiate the attack by adding a component to Pidgeot.
-    square.components.pidgeot_l_attack = {
-        targets = finalTargets,
-        hitsRemaining = #finalTargets,
-        hitTimer = 0.3, -- Time before the first hit
-        hitDelay = 0.3, -- Time between subsequent hits
-        damageValues = {power, power, power * 1.5} -- Damage for 1st, 2nd, 3rd hit
-    }
-
-    -- Make Pidgeot untargetable during the ultimate.
-    square.statusEffects.phasing = {duration = math.huge} -- Will be removed by the new system.
-
-    return true -- Attack successfully initiated.
 end
 
 return UnitAttacks

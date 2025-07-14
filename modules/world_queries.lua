@@ -72,13 +72,19 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
         -- Determine who to target (enemies, allies, etc.)
         local potentialTargets = {}
         local affects = attackData.affects or (attackData.type == "support" and "allies" or "enemies")
+
+        -- Correctly determine the target list based on the attacker's perspective.
+        -- An "enemy" to a player is an AI unit, and an "enemy" to an AI unit is a player.
+        local targetEnemies = (attacker.type == "player") and world.enemies or world.players
+        local targetAllies = (attacker.type == "player") and world.players or world.enemies
+
         if affects == "enemies" then
-            for _, e in ipairs(world.enemies) do table.insert(potentialTargets, e) end
+            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
         elseif affects == "allies" then
-            for _, p in ipairs(world.players) do table.insert(potentialTargets, p) end
+            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
         elseif affects == "all" then
-            for _, e in ipairs(world.enemies) do table.insert(potentialTargets, e) end
-            for _, p in ipairs(world.players) do table.insert(potentialTargets, p) end
+            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
+            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
         end
 
         -- Special case for hookshot: also allow targeting the flag
@@ -144,7 +150,6 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
     elseif style == "auto_hit_all" then
         -- This style doesn't need pre-calculated targets, it just hits.
         -- We can return a dummy table to indicate the attack is always valid if conditions are met.
-        if attackName == "aetherfall" then for _, e in ipairs(world.enemies) do if e.hp > 0 and e.statusEffects.airborne then return {true} end end end
         if attackName == "shockwave" then return {true} end -- Always available if you have enemies.
     end
 

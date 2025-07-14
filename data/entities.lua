@@ -111,7 +111,7 @@ function EntityFactory.createSquare(startTileX, startTileY, type, subType)
     return square
 end
 
-function EntityFactory.createProjectile(x, y, direction, attacker, power, isEnemy, statusEffect)
+function EntityFactory.createProjectile(x, y, direction, attacker, power, isEnemy, statusEffect, isPiercing)
     local projectile = {}
     projectile.x = x
     projectile.y = y
@@ -127,7 +127,9 @@ function EntityFactory.createProjectile(x, y, direction, attacker, power, isEnem
         attacker = attacker,
         power = power,
         isEnemyProjectile = isEnemy,
-        statusEffect = statusEffect
+        statusEffect = statusEffect,
+        isPiercing = isPiercing or false, -- Add the piercing flag
+        hitTargets = {} -- Keep track of who has been hit to prevent multi-hits
     }
 
     -- Projectiles don't need a full renderable component yet,

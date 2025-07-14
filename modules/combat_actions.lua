@@ -1,6 +1,7 @@
 -- combat_actions.lua
 -- Contains functions that directly apply combat results like damage and healing to entities.
 
+local EventBus = require("modules.event_bus")
 local EffectFactory = require("modules.effect_factory")
 
 local world_ref -- A reference to the main world object
@@ -23,8 +24,10 @@ end
 function CombatActions.applyStatusEffect(target, effectData)
     if target and target.statusEffects and effectData and effectData.type then
         -- This will overwrite any existing effect of the same type.
-        -- This is generally desired for things like stun, but might need more
-        -- complex logic later for stacking effects.
+        -- Trim leading/trailing whitespace from the effect type to prevent errors.
+        effectData.type = effectData.type:match("^%s*(.-)%s*$")
+
+        -- Now set the effect on the target
         target.statusEffects[effectData.type] = effectData
 
         -- Standardize airborne to be a 2-second, time-based visual effect.
@@ -32,14 +35,18 @@ function CombatActions.applyStatusEffect(target, effectData)
             effectData.duration = 2 -- 2 seconds
         end
 
-        -- Check for Tangrowth Square's passive to double careen distance
-        if effectData.type == "careening" and world_ref.passives.tangrowthCareenDouble then
+        -- Check for the "Whiplash" passive on the attacker's team to double careen distance.
+        if effectData.type == "careening" and effectData.attacker and #world_ref.teamPassives[effectData.attacker.type].Whiplash > 0 then
             effectData.force = effectData.force * 2
         end
+
+        -- Announce that a status was applied so other systems can react.
+        EventBus:dispatch("status_applied", {target = target, effect = effectData, world = world_ref})
     end
 end
 
-function CombatActions.applyDirectDamage(target, damageAmount, isCrit)
+-- The attacker is passed in to correctly attribute kills for passives like Bloodrush.
+function CombatActions.applyDirectDamage(target, damageAmount, isCrit, attacker)
     if not target or not target.hp or target.hp <= 0 then return end
 
     -- Check for Tangrowth Square's shield first.
@@ -52,10 +59,18 @@ function CombatActions.applyDirectDamage(target, damageAmount, isCrit)
 
     local roundedDamage = math.floor(damageAmount)
     if roundedDamage > 0 then
+        local wasAlive = target.hp > 0
         target.hp = target.hp - roundedDamage
         EffectFactory.createDamagePopup(target, roundedDamage, isCrit)
         target.components.shake = { timer = 0.2, intensity = 2 }
         if target.hp < 0 then target.hp = 0 end
+
+        -- If the unit was alive and is now at 0 HP, it just died.
+        if wasAlive and target.hp <= 0 then
+            -- Announce the death to any interested systems (quests, passives, etc.)
+            -- This is the primary source for kill-related events.
+            EventBus:dispatch("unit_died", { victim = target, killer = attacker })
+        end
     end
 end
 

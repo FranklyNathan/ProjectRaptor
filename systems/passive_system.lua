@@ -9,36 +9,36 @@ local PassiveSystem = {}
 
 -- This system updates the state of team-wide passives and applies their continuous effects.
 function PassiveSystem.update(dt, world)
-    -- 1. Update passive states
-    world.passives.venusaurCritBonus = 0
-    world.passives.florgesActive = false
-    world.passives.drapionActive = false
-    world.passives.tangrowthCareenDouble = false
-    world.passives.sceptileSpeedBoost = false
+    -- 1. Reset all passive provider lists for both teams.
+    for team, passives in pairs(world.teamPassives) do
+        for passiveName, providers in pairs(passives) do
+            -- Clear the list by setting it to a new empty table.
+            world.teamPassives[team][passiveName] = {}
+        end
+    end
 
+    -- 2. Populate lists for the player team with living units.
     for _, p in ipairs(world.players) do
         if p.hp > 0 then
             local blueprint = CharacterBlueprints[p.playerType]
-            if blueprint and blueprint.passive == "venusaur_crit_bonus" then
-                world.passives.venusaurCritBonus = 0.10
-            elseif blueprint and blueprint.passive == "florges_regen" then
-                world.passives.florgesActive = true
-            elseif blueprint and blueprint.passive == "drapion_action_on_kill" then
-                world.passives.drapionActive = true
-            elseif blueprint and blueprint.passive == "tangrowth_careen_double" then
-                world.passives.tangrowthCareenDouble = true
-            elseif blueprint and blueprint.passive == "sceptile_speed_boost" then
-                world.passives.sceptileSpeedBoost = true
+            if blueprint and blueprint.passives then
+                for _, passiveName in ipairs(blueprint.passives) do
+                    -- Add the unit to the list of providers for this passive.
+                    table.insert(world.teamPassives.player[passiveName], p)
+                end
             end
         end
     end
 
-    -- 2. Apply continuous passive effects
-    -- Florgessquare's Passive (HP Regeneration)
-    if world.passives.florgesActive then
-        for _, p in ipairs(world.players) do
-            if p.hp > 0 and p.hp < p.maxHp then
-                CombatActions.applyDirectHeal(p, 3 * dt)
+    -- 3. Populate lists for the enemy team with living units.
+    for _, e in ipairs(world.enemies) do
+        if e.hp > 0 then
+            local blueprint = EnemyBlueprints[e.enemyType]
+            if blueprint and blueprint.passives then
+                for _, passiveName in ipairs(blueprint.passives) do
+                    -- Add the unit to the list of providers for this passive.
+                    table.insert(world.teamPassives.enemy[passiveName], e)
+                end
             end
         end
     end

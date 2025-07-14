@@ -133,21 +133,9 @@ local function draw_entity(entity, world, is_active_player)
 
         -- Step 5: Reset the shader state after all drawing for this entity is done.
         love.graphics.setShader() 
-    else
-        love.graphics.setColor(entity.color) -- Set the square's color
-        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
     end
 
     drawHealthBar(entity)
-
-    -- If this is the active player, draw a white border around it
-    -- This now only applies to entities WITHOUT a sprite, as sprites get their own outline.
-    if is_active_player and not entity.components.animation then
-        love.graphics.setColor(1, 1, 1, 1) -- White border (R, G, B, Alpha)
-        love.graphics.setLineWidth(1) -- 1-pixel wide border
-        love.graphics.rectangle("line", entity.x, entity.y, entity.size, entity.size)
-        love.graphics.setLineWidth(1) -- Reset line width
-    end
 
     love.graphics.pop()
 end
@@ -213,7 +201,7 @@ function Renderer.draw_frame(world)
         -- 4. Draw the map cursor.
         if world.playerTurnState == "free_roam" or world.playerTurnState == "unit_selected" or
            world.playerTurnState == "cycle_targeting" or world.playerTurnState == "ground_aiming" then
-            love.graphics.setColor(1, 1, 1, 1) -- White
+            love.graphics.setColor(1, 1, 1, 1) -- White cursor outline
             love.graphics.setLineWidth(2)
             local cursorPixelX, cursorPixelY
             if world.playerTurnState == "cycle_targeting" and world.cycleTargeting.active and #world.cycleTargeting.targets > 0 then
@@ -368,10 +356,10 @@ function Renderer.draw_frame(world)
         end
     end
 
-    -- Draw Venusaursquare's beam projectiles
-    for _, beam in ipairs(world.projectiles) do
-        love.graphics.setColor(1, 0, 0, 1) -- Red color for the beam
-        love.graphics.rectangle("fill", beam.x, beam.y, beam.size, beam.size)
+    -- Draw projectiles
+    for _, projectile in ipairs(world.projectiles) do
+        love.graphics.setColor(1, 0.5, 0, 1) -- Orange/red color for projectiles
+        love.graphics.rectangle("fill", projectile.x, projectile.y, projectile.size, projectile.size)
     end
 
     -- Draw particle effects
