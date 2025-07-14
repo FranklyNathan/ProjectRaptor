@@ -17,9 +17,12 @@ function EffectTimerSystem.update(dt, world)
         -- Update time-based status effects like 'airborne'
         if s.statusEffects and s.statusEffects.airborne then
             local effect = s.statusEffects.airborne
-            effect.duration = effect.duration - dt
-            if effect.duration <= 0 then
-                s.statusEffects.airborne = nil
+            -- Only tick down the duration if it's not being controlled by another system.
+            if not effect.aetherfall_controlled then
+                effect.duration = effect.duration - dt
+                if effect.duration <= 0 then
+                    s.statusEffects.airborne = nil
+                end
             end
         end
     end

@@ -61,13 +61,13 @@ function TurnBasedMovementSystem.update(dt, world)
                                     local style = attackData.targeting_style
                                     local showAttack = false
 
-                                    -- Attacks that don't need a pre-existing target can always be shown.
+                                    -- Attacks that don't need a pre-existing target can always be shown in the menu.
                                     if style == "ground_aim" or style == "no_target" then
                                         showAttack = true
-                                    -- Attacks that must hit a target are only shown if a valid target exists.
-                                    elseif style == "cycle_target" or style == "auto_hit_all" then
+                                    -- For directional, cycle, and auto-hit attacks, check if any valid targets exist from the current position.
+                                    elseif style == "directional_aim" or style == "cycle_target" or style == "auto_hit_all" then
                                         if #WorldQueries.findValidTargetsForAttack(entity, attackName, world) > 0 then
-                                            showAttack = true -- Only show if there are valid targets.
+                                            showAttack = true
                                         end
                                     end
 

@@ -4,6 +4,7 @@
 local EventBus = require("modules.event_bus")
 local WorldQueries = require("modules.world_queries")
 local Grid = require("modules.grid")
+local AttackBlueprints = require("data.attack_blueprints")
 local EffectFactory = require("modules.effect_factory")
 
 local AetherfallSystem = {}
@@ -18,7 +19,13 @@ end
 -- Helper to find all empty tiles adjacent to a target.
 local function find_adjacent_open_tiles(target, world)
     local openTiles = {}
-    local neighbors = {{dx=0,dy=-1},{dx=0,dy=1},{dx=-1,dy=0},{dx=1,dy=0}}
+    -- The order is important for consistent attack visuals: Left, Right, Top, Bottom.
+    local neighbors = {
+        {dx = -1, dy = 0}, -- Left
+        {dx = 1,  dy = 0}, -- Right
+        {dx = 0,  dy = -1}, -- Top (Up)
+        {dx = 0,  dy = 1}  -- Bottom (Down)
+    }
     for _, move in ipairs(neighbors) do
         local checkX, checkY = target.tileX + move.dx, target.tileY + move.dy
         if not WorldQueries.isTileOccupied(checkX, checkY, nil, world) then
@@ -36,15 +43,18 @@ local function check_and_trigger_aetherfall(airborne_target, reacting_team_type,
         -- Check all conditions for this unit
         local distance = math.abs(reactor.tileX - airborne_target.tileX) + math.abs(reactor.tileY - airborne_target.tileY)
         local canReact = not reactor.hasActed and
-                         distance <= 10 and
+                         distance <= 16 and
                          not reactor.components.aetherfall_attack -- Don't trigger if already attacking
 
         if canReact then
             local openTiles = find_adjacent_open_tiles(airborne_target, world)
             if #openTiles > 0 then
-                -- Take control of the airborne status to prevent it from timing out.
+                -- Take control of the airborne status to prevent it from timing out during the wait.
                 if airborne_target.statusEffects and airborne_target.statusEffects.airborne then
-                    airborne_target.statusEffects.airborne.duration = math.huge
+                    -- Set the duration to the peak of the animation (1s into a 2s effect)
+                    -- and add a flag to prevent the timer system from ticking it down.
+                    airborne_target.statusEffects.airborne.duration = 1
+                    airborne_target.statusEffects.airborne.aetherfall_controlled = true
                 end
 
                 -- Trigger the attack!
@@ -52,7 +62,7 @@ local function check_and_trigger_aetherfall(airborne_target, reacting_team_type,
                     target = airborne_target,
                     hitLocations = openTiles,
                     hitsRemaining = #openTiles,
-                    hitTimer = 0.1, -- Short delay before the first hit
+                    hitTimer = 1, -- Wait 1 second for the airborne animation to play out.
                     hitDelay = 0.2, -- Time between subsequent hits
                 }
                 -- One unit reacts, that's enough.
@@ -100,23 +110,27 @@ function AetherfallSystem.update(dt, world)
                         -- Get the next location to warp to.
                         local locationIndex = #attack.hitLocations - attack.hitsRemaining + 1
                         local warpTile = attack.hitLocations[locationIndex]
+                        
+                        -- Check if the tile is still open before warping. This prevents finishing on an occupied tile.
+                        if not WorldQueries.isTileOccupied(warpTile.tileX, warpTile.tileY, nil, world) then
+                            -- The tile is open. Proceed with the attack.
+                            -- Teleport the unit
+                            unit.tileX, unit.tileY = warpTile.tileX, warpTile.tileY
+                            unit.x, unit.y = Grid.toPixels(warpTile.tileX, warpTile.tileY)
+                            unit.targetX, unit.targetY = unit.x, unit.y
 
-                        -- Teleport the unit
-                        unit.tileX, unit.tileY = warpTile.tileX, warpTile.tileY
-                        unit.x, unit.y = Grid.toPixels(warpTile.tileX, warpTile.tileY)
-                        unit.targetX, unit.targetY = unit.x, unit.y
+                            -- Make the unit face the target
+                            local dx, dy = target.tileX - unit.tileX, target.tileY - unit.tileY
+                            if math.abs(dx) > math.abs(dy) then unit.lastDirection = (dx > 0) and "right" or "left"
+                            else unit.lastDirection = (dy > 0) and "down" or "up" end
 
-                        -- Make the unit face the target
-                        local dx, dy = target.tileX - unit.tileX, target.tileY - unit.tileY
-                        if math.abs(dx) > math.abs(dy) then unit.lastDirection = (dx > 0) and "right" or "left"
-                        else unit.lastDirection = (dy > 0) and "down" or "up" end
+                            -- Execute a "Slash" attack effect.
+                            local slashPower = AttackBlueprints.slash.power or 20
+                            local targetType = (unit.type == "player") and "enemy" or "player"
+                            EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, unit, slashPower, false, targetType)
+                        end
 
-                        -- Execute a "Slash" attack effect.
-                        local slashPower = AttackBlueprints.slash.power or 20
-                        local targetType = (unit.type == "player") and "enemy" or "player"
-                        EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, unit, slashPower, false, targetType)
-
-                        -- Update state for the next hit
+                        -- Update state for the next hit regardless of whether we attacked.
                         attack.hitsRemaining = attack.hitsRemaining - 1
                         attack.hitTimer = attack.hitDelay
                     end
@@ -130,6 +144,11 @@ function AetherfallSystem.update(dt, world)
                     end
                     -- Clean up the component. The unit's turn is NOT consumed.
                     unit.components.aetherfall_attack = nil
+
+                    -- After a reactive move like Aetherfall, the unit's "start of turn" position
+                    -- is now its new location. This ensures that if the player moves and then
+                    -- cancels, the unit returns to this new spot, not its original one.
+                    unit.startOfTurnTileX, unit.startOfTurnTileY = unit.tileX, unit.tileY
                 end
             end
         end

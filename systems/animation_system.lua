@@ -28,7 +28,9 @@ function AnimationSystem.update(dt, world)
             -- This is more robust than checking against targetX/Y, as it catches all forms
             -- of movement (grid-based, dashes, knockbacks, etc.).
             local isMoving = (entity.x ~= animComponent.prevX) or (entity.y ~= animComponent.prevY)
-            local shouldBePaused = not isMoving and not entity.isFlying
+            -- A unit should also animate if it's airborne, even if its logical position isn't changing.
+            local isAirborne = entity.statusEffects and entity.statusEffects.airborne
+            local shouldBePaused = not isMoving and not entity.isFlying and not isAirborne
 
             if shouldBePaused then
                 -- If the entity should be still but is animating, pause it.

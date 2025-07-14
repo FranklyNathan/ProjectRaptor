@@ -35,7 +35,7 @@ local AttackBlueprints = {
     shockwave = {power = 0, type = "utility", targeting_style = "auto_hit_all"},
 
     -- Movement Attacks
-    quick_step = {power = 0, type = "utility", targeting_style = "ground_aim", range = 4, line_of_sight_only = true},
+    quick_step = {power = 0, type = "utility", targeting_style = "ground_aim", range = 3, line_of_sight_only = true},
 
     -- Environment Attacks
     sylvan_spire = {power = 0, type = "utility", targeting_style = "ground_aim", range = 6},

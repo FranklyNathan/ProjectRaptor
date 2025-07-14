@@ -53,7 +53,7 @@ local CharacterBlueprints = {
         dominantColor = {0.6, 0.6, 0.7}, -- Magnezone: Steel Grey
         passives = {},
         attacks = {
-            "slash"
+            "slash", "fireball"
         }
     },
     electiviresquare = {

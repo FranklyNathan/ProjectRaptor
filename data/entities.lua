@@ -4,6 +4,9 @@
 
 local Assets = require("modules.assets")
 local Grid = require("modules.grid")
+local Config = require("config")
+local CharacterBlueprints = require("data.character_blueprints")
+local EnemyBlueprints = require("data.enemy_blueprints")
 
 local EntityFactory = {}
 

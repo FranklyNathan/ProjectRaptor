@@ -42,7 +42,7 @@ function World.new()
     self.cursorInput = {
         timer = 0,
         initialDelay = 0.35, -- Time before repeat starts
-        repeatDelay = 0.08,  -- Time between subsequent repeats
+        repeatDelay = 0.05,  -- Time between subsequent repeats
         activeKey = nil
     }
 

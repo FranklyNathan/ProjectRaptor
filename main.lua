@@ -75,12 +75,13 @@ function love.load()
     -- For pixel fonts, using the intended size (e.g., 8, 16) is crucial for sharpness.
     GameFont = love.graphics.newFont("assets/Px437_DOS-V_TWN16.ttf", 16)
 
+    love.graphics.setFont(GameFont)
+
     canvas = love.graphics.newCanvas(Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT)
     canvas:setFilter("nearest", "nearest")
 
     -- Initialize factories and modules that need a reference to the world
     local EffectFactory = require("modules.effect_factory")
-    CombatActions.init(world)
     EffectFactory.init(world)
 
     -- Register global event listeners
@@ -164,8 +165,7 @@ end
 function love.draw()
     -- 1. Draw the entire game world to the off-screen canvas at its native resolution.
     love.graphics.setCanvas(canvas)
-    love.graphics.clear()
-    Renderer.draw_frame(world)
+    Renderer.draw(world)
     love.graphics.setCanvas()
 
     -- 2. Draw the canvas to the screen, scaled and centered to fit the window.

@@ -59,7 +59,7 @@ function AttackResolutionSystem.update(dt, world)
                                     local dx, dy = target.x - effectCenterX, target.y - effectCenterY
                                     statusCopy.direction = (math.abs(dx) > math.abs(dy)) and ((dx > 0) and "right" or "left") or ((dy > 0) and "down" or "up")
                                 end
-                                CombatActions.applyStatusEffect(target, statusCopy)
+                                CombatActions.applyStatusEffect(target, statusCopy, world)
                             end
                         end
                     end

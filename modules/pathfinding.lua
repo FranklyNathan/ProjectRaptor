@@ -16,7 +16,8 @@ function Pathfinding.calculateReachableTiles(startUnit, world)
     local startPosKey = startUnit.tileX .. "," .. startUnit.tileY
 
     cost_so_far[startPosKey] = 0
-    reachable[startPosKey] = 0 -- The starting tile is always a valid "landing" spot.
+    -- The starting tile is always a valid "landing" spot. The value is now a table.
+    reachable[startPosKey] = { cost = 0, landable = true }
 
     local head = 1
     while head <= #frontier do
@@ -57,13 +58,13 @@ function Pathfinding.calculateReachableTiles(startUnit, world)
                             -- Valid, unoccupied tile.
                             cost_so_far[nextPosKey] = nextCost
                             came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
-                            reachable[nextPosKey] = nextCost -- It's a valid landing spot.
+                            reachable[nextPosKey] = { cost = nextCost, landable = true } -- It's a valid landing spot.
                             table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
                         elseif canPassThrough then
                             -- Can move over the tile, but cannot land on it.
-                            -- We still explore from here, but don't add it to the 'reachable' table.
                             cost_so_far[nextPosKey] = nextCost
                             came_from[nextPosKey] = {tileX = current.tileX, tileY = current.tileY}
+                            reachable[nextPosKey] = { cost = nextCost, landable = false } -- Add to reachable, but mark as not landable.
                             table.insert(frontier, {tileX = nextTileX, tileY = nextTileY, cost = nextCost})
                         end
                     end

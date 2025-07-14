@@ -93,6 +93,8 @@ function GrappleHookSystem.update(dt, world)
                         end
                         attacker.targetX, attacker.targetY = destX, destY
                         attacker.speedMultiplier = pullSpeed
+                        -- Update the logical tile position immediately.
+                        attacker.tileX, attacker.tileY = Grid.toTile(destX, destY)
                     elseif pullTarget then
                         -- Target is pulled to the tile adjacent to the attacker
                         local destX, destY = attacker.x, attacker.y
@@ -103,6 +105,8 @@ function GrappleHookSystem.update(dt, world)
                         end
                         target.targetX, target.targetY = destX, destY
                         target.speedMultiplier = pullSpeed
+                        -- Update the logical tile position immediately.
+                        target.tileX, target.tileY = Grid.toTile(destX, destY)
                     elseif pullBoth then
                         -- Both are pulled towards each other, meeting in the middle.
                         local moveTiles = math.floor((hook.distanceTraveled / Config.SQUARE_SIZE) / 2)
@@ -112,6 +116,9 @@ function GrappleHookSystem.update(dt, world)
                         attacker.targetX, attacker.targetY = Grid.getDestination(attacker.x, attacker.y, hook.direction, movePixels)
                         target.targetX, target.targetY = Grid.getDestination(target.x, target.y, hook.direction, -movePixels)
                         attacker.speedMultiplier, target.speedMultiplier = pullSpeed, pullSpeed
+                        -- Update the logical tile positions immediately.
+                        attacker.tileX, attacker.tileY = Grid.toTile(attacker.targetX, attacker.targetY)
+                        target.tileX, target.tileY = Grid.toTile(target.targetX, target.targetY)
                     end
 
                     -- 4. Mark the hook for deletion

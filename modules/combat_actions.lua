@@ -4,13 +4,7 @@
 local EventBus = require("modules.event_bus")
 local EffectFactory = require("modules.effect_factory")
 
-local world_ref -- A reference to the main world object
-
 local CombatActions = {}
-
-function CombatActions.init(world)
-    world_ref = world
-end
 
 function CombatActions.applyDirectHeal(target, healAmount)
     if target and target.hp and target.hp > 0 then
@@ -21,8 +15,8 @@ function CombatActions.applyDirectHeal(target, healAmount)
     return false
 end
 
-function CombatActions.applyStatusEffect(target, effectData)
-    if target and target.statusEffects and effectData and effectData.type then
+function CombatActions.applyStatusEffect(target, effectData, world)
+    if target and target.statusEffects and effectData and effectData.type and world then
         -- This will overwrite any existing effect of the same type.
         -- Trim leading/trailing whitespace from the effect type to prevent errors.
         effectData.type = effectData.type:match("^%s*(.-)%s*$")
@@ -36,12 +30,12 @@ function CombatActions.applyStatusEffect(target, effectData)
         end
 
         -- Check for the "Whiplash" passive on the attacker's team to double careen distance.
-        if effectData.type == "careening" and effectData.attacker and #world_ref.teamPassives[effectData.attacker.type].Whiplash > 0 then
+        if effectData.type == "careening" and effectData.attacker and #world.teamPassives[effectData.attacker.type].Whiplash > 0 then
             effectData.force = effectData.force * 2
         end
 
         -- Announce that a status was applied so other systems can react.
-        EventBus:dispatch("status_applied", {target = target, effect = effectData, world = world_ref})
+        EventBus:dispatch("status_applied", {target = target, effect = effectData, world = world})
     end
 end
 

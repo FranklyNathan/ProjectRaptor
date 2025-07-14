@@ -3,6 +3,8 @@
 
 local Geometry = require("modules.geometry")
 local Grid = require("modules.grid")
+local AttackPatterns = require("modules.attack_patterns")
+local AttackBlueprints = require("data.attack_blueprints")
 
 local WorldQueries = {}
 function WorldQueries.isTileOccupied(tileX, tileY, excludeSquare, world)
@@ -151,6 +153,45 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
         -- This style doesn't need pre-calculated targets, it just hits.
         -- We can return a dummy table to indicate the attack is always valid if conditions are met.
         if attackName == "shockwave" then return {true} end -- Always available if you have enemies.
+    elseif style == "directional_aim" then
+        local patternFunc = AttackPatterns[attackName]
+        if not patternFunc then return {} end
+
+        -- Determine who to target
+        local isHeal = attackData.type == "support"
+        local potentialTargets = {}
+        local affects = attackData.affects or (isHeal and "allies" or "enemies")
+        local targetEnemies = (attacker.type == "player") and world.enemies or world.players
+        local targetAllies = (attacker.type == "player") and world.players or world.enemies
+
+        if affects == "enemies" then for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
+        elseif affects == "allies" then for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
+        elseif affects == "all" then
+            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
+            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
+        end
+
+        -- Check all 4 directions from the attacker's current position
+        local tempAttacker = { tileX = attacker.tileX, tileY = attacker.tileY, x = attacker.x, y = attacker.y, size = attacker.size }
+        local directions = {"up", "down", "left", "right"}
+        for _, dir in ipairs(directions) do
+            tempAttacker.lastDirection = dir
+            local effects = patternFunc(tempAttacker)
+            for _, effectData in ipairs(effects) do
+                local s = effectData.shape
+                local startTileX, startTileY = Grid.toTile(s.x, s.y)
+                local endTileX, endTileY = Grid.toTile(s.x + s.w - 1, s.y + s.h - 1)
+
+                for _, target in ipairs(potentialTargets) do
+                    if target.hp > 0 and target ~= attacker and target.tileX >= startTileX and target.tileX <= endTileX and target.tileY >= startTileY and target.tileY <= endTileY then
+                        -- Found a valid target. Add it to the list if not already there.
+                        local found = false
+                        for _, vt in ipairs(validTargets) do if vt == target then found = true; break end end
+                        if not found then table.insert(validTargets, target) end
+                    end
+                end
+            end
+        end
     end
 
     return validTargets

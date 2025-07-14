@@ -7,6 +7,8 @@ local CombatActions = require("modules.combat_actions")
 local AttackPatterns = require("modules.attack_patterns")
 local Grid = require("modules.grid")
 local Assets = require("modules.assets")
+local EntityFactory = require("data.entities")
+local AttackBlueprints = require("data.attack_blueprints")
 
 local UnitAttacks = {}
 
@@ -29,8 +31,8 @@ local function executePatternAttack(square, power, patternFunc, isHeal, targetTy
     end
 end
 
-UnitAttacks.slash = function(attacker, power, world)
-    -- This is the new model for a cycle_target attack.
+-- Helper for cycle_target attacks that deal damage.
+local function executeCycleTargetDamageAttack(attacker, power, world, statusEffect)
     -- 1. Get the selected target from the cycle targeting system.
     if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
         return false -- Failsafe, should not happen if called correctly.
@@ -49,8 +51,18 @@ UnitAttacks.slash = function(attacker, power, world)
     local targetType = (attacker.type == "player") and "enemy" or "player"
 
     -- 3. Execute the attack effect directly on the target's tile.
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType)
+    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType, nil, statusEffect)
     return true
+end
+
+UnitAttacks.slash = function(attacker, power, world)
+    -- This is the new model for a cycle_target attack.
+    -- 1. Get the selected target from the cycle targeting system.
+    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
+        return false -- Failsafe, should not happen if called correctly.
+    end
+    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
+    return executeCycleTargetDamageAttack(attacker, power, world, nil)
 end
 
 UnitAttacks.longshot = function(attacker, power, world)
@@ -88,27 +100,8 @@ UnitAttacks.viscous_strike = function(square, power, world)
 end
 
 UnitAttacks.venom_stab = function(attacker, power, world)
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
-
-    -- Determine the correct target type based on the attacker's team.
-    local targetType = (attacker.type == "player") and "enemy" or "player"
-
-    -- 3. Execute the attack on the target's tile with a poison status effect.
     local status = {type = "poison", duration = 3} -- Lasts 3 turns
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType, nil, status)
-    return true
+    return executeCycleTargetDamageAttack(attacker, power, world, status)
 end
 
 UnitAttacks.phantom_step = function(square, power, world)
@@ -214,27 +207,8 @@ UnitAttacks.shockwave = function(square, power, world)
 end
 
 UnitAttacks.uppercut = function(attacker, power, world)
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
-
-    -- Determine the correct target type based on the attacker's team.
-    local targetType = (attacker.type == "player") and "enemy" or "player"
-
-    -- 3. Execute the attack on the target's tile with an airborne status effect.
     local status = {type = "airborne"}
-    EffectFactory.addAttackEffect(target.x, target.y, target.size, target.size, {1, 0, 0, 1}, 0, attacker, power, false, targetType, nil, status)
-    return true
+    return executeCycleTargetDamageAttack(attacker, power, world, status)
 end
 
 UnitAttacks.quick_step = function(attacker, power, world)
@@ -255,14 +229,17 @@ UnitAttacks.quick_step = function(attacker, power, world)
         local dirX = dx / distance
         local dirY = dy / distance
 
+        -- Determine which list of units to check against for collision.
+        local targetsToCheck = (attacker.type == "player") and world.enemies or world.players
+
         -- Iterate over the tiles between the start and end point.
         for i = 1, distance - 1 do
             local pathTileX = attacker.tileX + i * dirX
             local pathTileY = attacker.tileY + i * dirY
 
-            for _, enemy in ipairs(world.enemies) do
-                if enemy.tileX == pathTileX and enemy.tileY == pathTileY and enemy.hp > 0 then
-                    CombatActions.applyStatusEffect(enemy, {type = "airborne", attacker = attacker})
+            for _, unitToHit in ipairs(targetsToCheck) do
+                if unitToHit.tileX == pathTileX and unitToHit.tileY == pathTileY and unitToHit.hp > 0 then
+                    CombatActions.applyStatusEffect(unitToHit, {type = "airborne", attacker = attacker}, world)
                 end
             end
         end

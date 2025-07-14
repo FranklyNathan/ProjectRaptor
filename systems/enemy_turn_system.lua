@@ -85,7 +85,8 @@ local function findBestCycleTargetAttackPosition(enemy, target, attackName, reac
 end
 
 -- Finds the reachable tile that is closest to the target.
-local function findClosestReachableTile(enemy, target, reachableTiles)
+-- This is a simple greedy approach and is used as a fallback.
+local function findClosestReachableTileByDistance(enemy, target, reachableTiles)
     local closestKey, closestDistSq = nil, math.huge
     for posKey, _ in pairs(reachableTiles) do
         if posKey ~= (enemy.tileX .. "," .. enemy.tileY) then
@@ -96,6 +97,52 @@ local function findClosestReachableTile(enemy, target, reachableTiles)
         end
     end
     return closestKey
+end
+
+-- A more intelligent way to find a tile to move to when no attack is possible.
+-- It performs a Breadth-First Search (BFS) starting from the target player, and the
+-- first tile it finds that is in the enemy's reachable set is the optimal one.
+-- This ensures the enemy is always moving along a valid path towards the target,
+-- preventing it from getting stuck in loops.
+local function findBestMoveOnlyTile(enemy, target, reachableTiles, world)
+    -- If there's nowhere to move, don't bother.
+    if not next(reachableTiles) then return nil end
+
+    local frontier = {{tileX = target.tileX, tileY = target.tileY}}
+    local visited = {[target.tileX .. "," .. target.tileY] = true}
+    local head = 1
+
+    while head <= #frontier do
+        local current = frontier[head]
+        head = head + 1
+
+        local currentKey = current.tileX .. "," .. current.tileY
+        -- Check if the current tile in our search is one the enemy can actually move to this turn.
+        if reachableTiles[currentKey] and currentKey ~= (enemy.tileX .. "," .. enemy.tileY) then
+            -- Success! We found a reachable tile that is on a valid path from the target.
+            return currentKey
+        end
+
+        local neighbors = {{dx=0,dy=-1},{dx=0,dy=1},{dx=-1,dy=0},{dx=1,dy=0}}
+        for _, move in ipairs(neighbors) do
+            local nextTileX, nextTileY = current.tileX + move.dx, current.tileY + move.dy
+            local nextKey = nextTileX .. "," .. nextTileY
+
+            if not visited[nextKey] and
+               nextTileX >= 0 and nextTileX < Config.MAP_WIDTH_TILES and
+               nextTileY >= 0 and nextTileY < Config.MAP_HEIGHT_TILES then
+                
+                -- The path for the BFS should not go through tiles occupied by other units.
+                if not WorldQueries.isTileOccupied(nextTileX, nextTileY, enemy, world) then
+                    visited[nextKey] = true
+                    table.insert(frontier, {tileX = nextTileX, tileY = nextTileY})
+                end
+            end
+        end
+    end
+
+    -- Fallback: If the target is completely unreachable (e.g., walled off), revert to the simple "closest distance" approach.
+    return findClosestReachableTileByDistance(enemy, target, reachableTiles)
 end
 
 function EnemyTurnSystem.update(dt, world)
@@ -173,7 +220,7 @@ function EnemyTurnSystem.update(dt, world)
 
         else
             -- Cannot attack, so just move closer. This consumes the turn.
-            local moveOnlyDestinationKey = findClosestReachableTile(actingEnemy, targetPlayer, reachableTiles)
+            local moveOnlyDestinationKey = findBestMoveOnlyTile(actingEnemy, targetPlayer, reachableTiles, world)
             if moveOnlyDestinationKey then
                 local startKey = actingEnemy.tileX .. "," .. actingEnemy.tileY
                 local path = Pathfinding.reconstructPath(came_from, startKey, moveOnlyDestinationKey)

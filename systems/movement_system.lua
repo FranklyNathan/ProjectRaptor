@@ -2,6 +2,8 @@
 -- Handles updating entity positions based on their target coordinates.
 -- Also manages the creation of afterimage effects during movement.
 
+local CharacterBlueprints = require("data.character_blueprints")
+
 local MovementSystem = {}
 
 function MovementSystem.update(dt, world)

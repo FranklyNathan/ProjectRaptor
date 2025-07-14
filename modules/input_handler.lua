@@ -55,11 +55,12 @@ local function move_cursor(dx, dy, world)
     -- If a unit is selected, update the movement path
     if world.playerTurnState == "unit_selected" then
         local goalPosKey = world.mapCursorTile.x .. "," .. world.mapCursorTile.y
-        if world.reachableTiles and world.reachableTiles[goalPosKey] then
+        -- Check if the tile is reachable AND landable.
+        if world.reachableTiles and world.reachableTiles[goalPosKey] and world.reachableTiles[goalPosKey].landable then
             local startPosKey = world.selectedUnit.tileX .. "," .. world.selectedUnit.tileY
             world.movementPath = Pathfinding.reconstructPath(world.came_from, startPosKey, goalPosKey)
         else
-            world.movementPath = nil -- Cursor is on an unreachable tile
+            world.movementPath = nil -- Cursor is on an unreachable or non-landable tile
         end
     end
 end
@@ -104,7 +105,7 @@ local function handle_free_roam_input(key, world)
             world.playerTurnState = "unit_selected"
             -- Calculate movement range and pathing data
             world.reachableTiles, world.came_from = Pathfinding.calculateReachableTiles(unit, world)
-            world.attackableTiles = RangeCalculator.calculateAttackableTiles(unit, world)
+            world.attackableTiles = RangeCalculator.calculateAttackableTiles(unit, world, world.reachableTiles)
             world.movementPath = {} -- Start with an empty path
         else
             -- If the cursor is on an empty tile, open the map menu.
@@ -174,11 +175,20 @@ local function handle_action_menu_input(key, world)
             world.playerTurnState = "unit_selected"
             world.selectedUnit = unit
             world.reachableTiles, world.came_from = Pathfinding.calculateReachableTiles(unit, world)
-            world.attackableTiles = RangeCalculator.calculateAttackableTiles(unit, world)
-            world.movementPath = {} -- Reset path
+            world.attackableTiles = RangeCalculator.calculateAttackableTiles(unit, world, world.reachableTiles)
 
             -- Close the action menu
             menu.active = false
+
+            -- After undoing the move, immediately recalculate the path to the current cursor position.
+            -- This makes the UI feel more responsive and matches user expectation.
+            local goalPosKey = world.mapCursorTile.x .. "," .. world.mapCursorTile.y
+            if world.reachableTiles and world.reachableTiles[goalPosKey] and world.reachableTiles[goalPosKey].landable then
+                local startPosKey = unit.tileX .. "," .. unit.tileY
+                world.movementPath = Pathfinding.reconstructPath(world.came_from, startPosKey, goalPosKey)
+            else
+                world.movementPath = nil -- No valid path to the current cursor tile.
+            end
         end
     elseif key == "j" then -- Confirm action
 
@@ -192,7 +202,9 @@ local function handle_action_menu_input(key, world)
             if allPlayersHaveActed(world) then
                 world.turnShouldEnd = true
             else
-                focus_next_available_player(world)
+                -- Leave the cursor on the unit that just acted.
+                world.mapCursorTile.x = menu.unit.tileX
+                world.mapCursorTile.y = menu.unit.tileY
             end
         else -- It's an attack.
             local attackName = selectedOption.key
@@ -255,8 +267,8 @@ local function handle_action_menu_input(key, world)
                         end
                     end
                 end
-            elseif attackData.targeting_style == "no_target" then
-                -- Execute immediately and end the unit's turn.
+            -- Directional and no-target attacks execute immediately without further aiming.
+            elseif attackData.targeting_style == "no_target" or attackData.targeting_style == "directional_aim" then
                 AttackHandler.execute(unit, attackName, world)
                 unit.hasActed = true
                 world.playerTurnState = "free_roam"
@@ -264,7 +276,9 @@ local function handle_action_menu_input(key, world)
                 if allPlayersHaveActed(world) then
                     world.turnShouldEnd = true
                 else
-                    focus_next_available_player(world)
+                    -- Leave the cursor on the unit that just acted.
+                    world.mapCursorTile.x = unit.tileX
+                    world.mapCursorTile.y = unit.tileY
                 end
             end
         end
@@ -355,7 +369,9 @@ local function handle_ground_aiming_input(key, world)
             if allPlayersHaveActed(world) then
                 world.turnShouldEnd = true
             else
-                focus_next_available_player(world)
+                -- Leave the cursor on the unit that just acted.
+                world.mapCursorTile.x = unit.tileX
+                world.mapCursorTile.y = unit.tileY
             end
         end
     elseif key == "k" then -- Cancel Attack
@@ -402,8 +418,12 @@ local function handle_cycle_targeting_input(key, world)
         cycle.active = false
         cycle.targets = {}
 
-        if allPlayersHaveActed(world) then world.turnShouldEnd = true
-        else focus_next_available_player(world) end
+        if allPlayersHaveActed(world) then
+            world.turnShouldEnd = true
+        else
+            -- Leave the cursor on the unit that just acted.
+            world.mapCursorTile.x, world.mapCursorTile.y = attacker.tileX, attacker.tileY
+        end
     end
 
     -- If the selection changed, snap the cursor to the new target.
@@ -526,6 +546,9 @@ function InputHandler.handle_key_press(key, currentGameState, world)
                         world:queue_add_entity(playerObject)
                     end
                 end
+                -- Immediately process the additions and deletions to prevent visual glitches.
+                -- This is the key fix for units vanishing on unpause.
+                world:process_additions_and_deletions()
             end
             world.selectedSquare = nil -- Reset selection on unpause
             return "gameplay" -- Switch back to gameplay
@@ -554,24 +577,28 @@ function InputHandler.handle_continuous_input(dt, world)
 
     local cursor = world.cursorInput
     local dx, dy = 0, 0
-    local currentKey = nil
+    local keyString = ""
 
-    -- Determine which key is being pressed, giving priority to W/S over A/D.
-    if love.keyboard.isDown("w") then currentKey = "w"; dy = -1
-    elseif love.keyboard.isDown("s") then currentKey = "s"; dy = 1
-    elseif love.keyboard.isDown("a") then currentKey = "a"; dx = -1
-    elseif love.keyboard.isDown("d") then currentKey = "d"; dx = 1
-    end
+    -- Check for vertical and horizontal movement independently to allow diagonals.
+    if love.keyboard.isDown("w") then dy = -1; keyString = keyString .. "w" end
+    if love.keyboard.isDown("s") then dy = 1; keyString = keyString .. "s" end
+    if love.keyboard.isDown("a") then dx = -1; keyString = keyString .. "a" end
+    if love.keyboard.isDown("d") then dx = 1; keyString = keyString .. "d" end
 
-    if currentKey then
-        if currentKey ~= cursor.activeKey then
+    -- Prevent opposite keys from cancelling movement (e.g., W+S or A+D).
+    if love.keyboard.isDown("w") and love.keyboard.isDown("s") then dy = 0 end
+    if love.keyboard.isDown("a") and love.keyboard.isDown("d") then dx = 0 end
+
+    -- Only process if there is a direction to move.
+    if dx ~= 0 or dy ~= 0 then
+        if keyString ~= cursor.activeKey then
             -- A new key is pressed. Move immediately and set the initial delay.
             if world.playerTurnState == "ground_aiming" then
                 move_ground_aim_cursor(dx, dy, world)
             else
                 move_cursor(dx, dy, world)
             end
-            cursor.activeKey = currentKey
+            cursor.activeKey = keyString
             cursor.timer = cursor.initialDelay
         else
             -- The same key is being held. Wait for the timer.
