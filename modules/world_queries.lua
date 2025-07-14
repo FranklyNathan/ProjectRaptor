@@ -119,9 +119,17 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
 
         for _, target in ipairs(potentialTargets) do
             local isSelf = (target == attacker)
-            local isDead = (target.hp and target.hp <= 0)
+            
+            local canBeTargeted = false
+            if attackName == "hookshot" then
+                -- Hookshot can target any non-self entity with weight, but not dead units.
+                canBeTargeted = not isSelf and target.weight and not (target.hp and target.hp <= 0)
+            else
+                -- Standard targeting: not self, and not dead.
+                canBeTargeted = not isSelf and not (target.hp and target.hp <= 0)
+            end
 
-            if not isSelf and not isDead then
+            if canBeTargeted then
                 local dist = math.abs(attacker.tileX - target.tileX) + math.abs(attacker.tileY - target.tileY)
                 if dist >= minRange and dist <= range then
                     -- Special validation for hookshot (must be in a straight, unblocked line)

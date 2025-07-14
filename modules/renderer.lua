@@ -661,20 +661,23 @@ function Renderer.draw(world)
     -- 1. Clear the screen with a background color
     love.graphics.clear(0.1, 0.1, 0.1, 1)
 
-    -- 2. Apply camera for world-space drawing
-    Camera.apply()
-
-    -- Draw the Tiled map. This will draw all visible layers.
+    -- 2. Draw the Tiled map.
+    -- The 'sti' library handles its own drawing to an internal canvas and resets the graphics state.
+    -- Because of this, we can't use Camera.apply() for the map itself. Instead, we must pass
+    -- the camera's translation directly to the map's draw function.
     if world.map then
-        world.map:draw()
+        world.map:draw(-math.floor(Camera.x), -math.floor(Camera.y))
     end
 
-    -- Draw UI elements like range indicators first, so they appear under units.
+    -- 3. Now, apply the camera's transformation to draw all other world-space objects
+    -- (entities, UI elements like range indicators, etc.) so they are positioned correctly
+    -- relative to the map.
+    Camera.apply()
     draw_world_space_ui(world)
     draw_all_entities_and_effects(world)
     Camera.revert()
 
-    -- 3. Draw screen-space UI based on the current game state
+    -- 4. Draw screen-space UI based on the current game state
     if world.gameState == "gameplay" then
         draw_screen_space_ui(world)
         draw_debug_info(world)
@@ -682,7 +685,7 @@ function Renderer.draw(world)
         draw_party_select_ui(world)
     end
 
-    -- 4. Reset graphics state to be safe
+    -- 5. Reset graphics state to be safe
     love.graphics.setColor(1, 1, 1, 1)
 end
 

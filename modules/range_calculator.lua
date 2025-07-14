@@ -101,6 +101,30 @@ function RangeCalculator.calculateAttackableTiles(unit, world, reachableTiles)
                                 end
                             end
                         end
+                    elseif attackData.targeting_style == "ground_aim" then
+                        local range = attackData.range
+                        if range then
+                            -- From the current reachable tile (tileX, tileY), find all possible aim points.
+                            for dx = -range, range do
+                                for dy = -range, range do
+                                    if math.abs(dx) + math.abs(dy) <= range then
+                                        local aimTileX, aimTileY = tileX + dx, tileY + dy
+
+                                        -- Now, for each aim point, calculate the attack's AoE.
+                                        -- For Eruption, the final AoE is a 5x5 square.
+                                        -- We add a specific check for the attack name to avoid affecting other ground_aim attacks.
+                                        if attackName == "eruption" then
+                                            local aoeRadius = 2 -- 2 tiles in each direction for a 5x5 area.
+                                            for aoeX = aimTileX - aoeRadius, aimTileX + aoeRadius do
+                                                for aoeY = aimTileY - aoeRadius, aimTileY + aoeRadius do
+                                                    attackableTiles[aoeX .. "," .. aoeY] = true
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
                     else -- Handle directional patterns
                         local patternFunc = AttackPatterns[attackName]
                         if patternFunc then

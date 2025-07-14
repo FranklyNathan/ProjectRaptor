@@ -17,6 +17,7 @@ end
 function TurnBasedMovementSystem.update(dt, world)
     -- This system moves any entity that has a movement path.
     for _, entity in ipairs(world.all_entities) do
+        -- The check for entity.components is no longer needed, as world.lua now guarantees it exists.
         if entity.components.movement_path then
             -- Check if the unit is close enough to its current target tile.
             -- Using a small epsilon to handle floating-point inaccuracies from dt-based movement.

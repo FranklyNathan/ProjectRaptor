@@ -7,6 +7,7 @@ function EffectTimerSystem.update(dt, world)
     -- 1. Update timers on entity components
     for _, s in ipairs(world.all_entities) do
         -- Update shake timer
+        -- The check for s.components is no longer needed, as world.lua now guarantees it exists.
         if s.components.shake then
             s.components.shake.timer = s.components.shake.timer - dt
             if s.components.shake.timer <= 0 then

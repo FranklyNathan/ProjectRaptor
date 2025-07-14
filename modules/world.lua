@@ -2,6 +2,7 @@
 -- The World object is the single source of truth for all entity data and collections.
 
 local EventBus = require("modules.event_bus")
+local Assets = require("modules.assets")
 local Grid = require("modules.grid")
 local EntityFactory = require("data.entities")
 
@@ -120,23 +121,33 @@ function World.new(gameMap)
         end
     end
 
-    -- Create and place obstacles from the map's "Obstacles" object layer.
-    if self.map.layers["Obstacles"] then
-        for _, obj in ipairs(self.map.layers["Obstacles"].objects) do
-            local tileX, tileY = Grid.toTile(obj.x, obj.y)
+    -- Create and place obstacles from the map's object layers.
+    -- This looks for a layer named "Obstacles" or "Trees" and makes them fully interactive.
+    local obstacleLayer = self.map.layers["Obstacles"] or self.map.layers["Trees"]
+    if obstacleLayer and obstacleLayer.type == "objectgroup" then
+        for _, obj in ipairs(obstacleLayer.objects) do
+            -- Tiled positions objects with GIDs from their bottom-left corner.
+            -- We need to adjust the y-coordinate to be top-left for our game's logic.
+            local objTopLeftY = obj.y - obj.height
+            local tileX, tileY = Grid.toTile(obj.x, objTopLeftY)
+            -- Recalculate pixel coordinates from tile coordinates to ensure perfect grid alignment.
+            local pixelX, pixelY = Grid.toPixels(tileX, tileY)
+
             local obstacle = {
-                x = obj.x,
-                y = obj.y,
+                x = pixelX,
+                y = pixelY,
                 tileX = tileX,
                 tileY = tileY,
                 width = obj.width,
                 height = obj.height,
                 size = obj.width, -- Assuming square obstacles for now
                 weight = (obj.properties and obj.properties.weight) or "Heavy",
-                sprite = Assets.images.Flag, -- All obstacles are trees for now
-                isObstacle = true -- A flag to identify these objects
+                components = {}, -- Ensure all entities have a components table for system compatibility.
+                sprite = Assets.images.Flag, -- For now, all obstacles use the same tree sprite.
+                isObstacle = true -- A flag to identify these objects as obstacles.
             }
-            table.insert(self.obstacles, obstacle)
+            -- Add the obstacle to all relevant entity lists so it's recognized by all game systems.
+            self:queue_add_entity(obstacle)
         end
     end
 
@@ -221,6 +232,11 @@ function World:_add_entity(entity)
     -- This cleans up state from previous removals (e.g. a dead character from the roster being re-added)
     -- and prevents duplication bugs during party swaps.
     entity.isMarkedForDeletion = nil
+    -- Ensure all entities have a components table for system compatibility.
+    -- This is a safety net for entities created without one.
+    if not entity.components then
+        entity.components = {}
+    end
     table.insert(self.all_entities, entity)
     if entity.type == "player" then
         table.insert(self.players, entity)
@@ -228,19 +244,30 @@ function World:_add_entity(entity)
         table.insert(self.enemies, entity)
     elseif entity.type == "projectile" then
         table.insert(self.projectiles, entity)
+    elseif entity.isObstacle then
+        table.insert(self.obstacles, entity)
     end
 end
 
 -- Removes an entity from its specific list.
 function World:_remove_from_specific_list(entity)
-    local list = (entity.type == "player" and self.players) or
-                 (entity.type == "enemy" and self.enemies) or
-                 (entity.type == "projectile" and self.projectiles)
-    if not list then return end
-    for i = #list, 1, -1 do
-        if list[i] == entity then
-            table.remove(list, i)
-            return
+    local list
+    if entity.type == "player" then
+        list = self.players
+    elseif entity.type == "enemy" then
+        list = self.enemies
+    elseif entity.type == "projectile" then
+        list = self.projectiles
+    elseif entity.isObstacle then
+        list = self.obstacles
+    end
+
+    if list then
+        for i = #list, 1, -1 do
+            if list[i] == entity then
+                table.remove(list, i)
+                return
+            end
         end
     end
 end

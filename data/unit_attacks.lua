@@ -281,7 +281,7 @@ UnitAttacks.sylvan_spire = function(square, power, world)
         sprite = Assets.images.Flag, -- The tree sprite
         isObstacle = true
     }
-    table.insert(world.obstacles, newObstacle)
+    world:queue_add_entity(newObstacle)
 
     -- Create a visual effect on the target tile so the player sees the action.
     EffectFactory.addAttackEffect(landX, landY, Config.SQUARE_SIZE, Config.SQUARE_SIZE, {0.2, 0.8, 0.3, 0.7}, 0, square, 0, false, "none")
