@@ -142,9 +142,9 @@ function RangeCalculator.calculateAttackableTiles(unit, world, reachableTiles)
                             end
                         end
                     end
-                end
             end
-        end
+        end        
+    end
     end
 
     return attackableTiles

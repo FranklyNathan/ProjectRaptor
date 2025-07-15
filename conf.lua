@@ -6,4 +6,5 @@ function love.conf(t)
     t.window.minwidth = 768
     t.window.minheight = 576
     t.window.highdpi = true
+    t.console = true -- This will show a console window for print statements
 end

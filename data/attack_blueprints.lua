@@ -33,7 +33,7 @@ local AttackBlueprints = {
     mend = {power = 0, type = "support", targeting_style = "cycle_target", range = 1, affects = "allies"},
 
     -- Status Attacks
-    shockwave = {power = 0, type = "utility", targeting_style = "no_target", range = 14, affects = "all"},
+    shockwave = {power = 0, type = "utility", targeting_style = "cycle_target", range = 14, affects = "enemies"},
 
     -- Movement Attacks
     quick_step = {power = 0, type = "utility", targeting_style = "ground_aim", range = 3, line_of_sight_only = true},

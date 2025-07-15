@@ -68,4 +68,18 @@ function CombatActions.applyDirectDamage(target, damageAmount, isCrit, attacker)
     end
 end
 
+function CombatActions.executeShockwave(attacker, attackData, world)
+    if not attacker or not attackData or not world then return false end
+    for _, entity in ipairs(world.all_entities) do
+        if entity.hp ~= nil and entity.hp > 0 and entity.type ~= attacker.type then
+            -- Shockwave hits all enemies within range of the *attacker*, not the target.
+            local distance = math.abs(attacker.tileX - entity.tileX) + math.abs(attacker.tileY - entity.tileY)
+            if distance <= attackData.range then                
+                CombatActions.applyStatusEffect(entity, {type = "paralyzed", duration = 2, attacker = attacker}, world)
+            end
+        end
+    end
+    return true
+end
+
 return CombatActions

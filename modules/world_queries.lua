@@ -76,6 +76,16 @@ function WorldQueries.isTargetInPattern(attacker, patternFunc, targets, world)
     return false -- No targets were found within the entire pattern
 end
 
+-- A helper function to get a unit's final movement range, accounting for status effects.
+-- This should be used by the pathfinding system when calculating reachable tiles.
+function WorldQueries.getUnitMovement(unit)
+    if unit and unit.statusEffects and unit.statusEffects.paralyzed then
+        return 0
+    end
+    -- In the future, this could also account for buffs/debuffs.
+    return unit and unit.movement or 0
+end
+
 -- Helper to get a list of potential targets based on an attack's 'affects' property.
 local function getPotentialTargets(attacker, attackData, world)
     local potentialTargets = {}
@@ -117,7 +127,7 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
 
         -- Determine range
         local range = attackData.range
-        if attackName == "phantom_step" then range = attacker.movement end -- Dynamic range
+        if attackName == "phantom_step" then range = WorldQueries.getUnitMovement(attacker) end -- Dynamic range
         local minRange = attackData.min_range or 1
 
         if not range then return {} end -- Can't find targets for an attack without a defined range
@@ -181,7 +191,10 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
     elseif style == "auto_hit_all" then
         -- This style doesn't need pre-calculated targets, it just hits.
         -- We can return a dummy table to indicate the attack is always valid if conditions are met.
-        if attackName == "shockwave" then return {true} end -- Always available if you have enemies.
+        if attackName == "shockwave" then
+            return {true}
+        end -- Always available if you have enemies (validation done elsewhere).
+        
     elseif style == "directional_aim" then
         local patternFunc = AttackPatterns[attackName]
         if not patternFunc then return {} end
@@ -209,9 +222,27 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
                 end
             end
         end
-    end
+        
+    elseif style == "cycle_target" and attackName == "shockwave" then
+        local potentialTargets = getPotentialTargets(attacker, attackData, world)
+    
+            -- Determine range
+            local range = attackData.range
+            if not range then return {} end -- Can't find targets for an attack without a defined range
 
-    return validTargets
+            for _, target in ipairs(potentialTargets) do
+                local isSelf = (target == attacker)
+                local canBeTargeted = not isSelf and not (target.hp and target.hp <= 0)
+
+                if canBeTargeted then
+                    local dist = math.abs(attacker.tileX - target.tileX) + math.abs(attacker.tileY - target.tileY)
+                    if dist <= range then
+                            table.insert(validTargets, target)
+                    end
+                end
+            end
+        end        
+    return validTargets    
 end
 
 return WorldQueries

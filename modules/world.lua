@@ -38,7 +38,7 @@ function World.new(gameMap)
     self.attackAoETiles = nil -- The shape of the attack for the targeting preview
     self.attackableTiles = nil -- The full attack range of a selected unit
     self.groundAimingGrid = nil -- The grid of valid tiles for ground-aiming attacks
-    self.cycleTargeting = { -- For abilities that cycle through targets
+        self.cycleTargeting = { -- For abilities that cycle through targets
         active = false,
         targets = {},
         selectedIndex = 1
@@ -223,6 +223,18 @@ function World:endTurn()
         self.movementPath = nil
         self.came_from = nil
         self.playerTurnState = "free_roam"
+
+        -- Tick down status effect durations for enemies at start of their turn.
+        for _, enemy in ipairs(self.enemies) do
+            if enemy.statusEffects and enemy.statusEffects.paralyzed then
+                if enemy.statusEffects.paralyzed.duration then
+                    enemy.statusEffects.paralyzed.duration = enemy.statusEffects.paralyzed.duration - 1
+                    if enemy.statusEffects.paralyzed.duration <= 0 then
+                        enemy.statusEffects.paralyzed = nil
+                    end
+                end
+            end
+        end
     elseif self.turn == "enemy" then
         -- Announce that the enemy's turn has ended.
         EventBus:dispatch("enemy_turn_ended", {world = self})
@@ -234,6 +246,18 @@ function World:endTurn()
             player.startOfTurnTileX, player.startOfTurnTileY = player.tileX, player.tileY
         end
         self.playerTurnState = "free_roam"
+
+        -- Tick down status effect durations for players at start of their turn.
+        for _, player in ipairs(self.players) do
+            if player.statusEffects and player.statusEffects.paralyzed then
+                if player.statusEffects.paralyzed.duration then
+                    player.statusEffects.paralyzed.duration = player.statusEffects.paralyzed.duration - 1
+                    if player.statusEffects.paralyzed.duration <= 0 then
+                        player.statusEffects.paralyzed = nil
+                    end
+                end
+            end
+        end
 
         -- At the start of the player's turn, move the cursor to the first available unit.
         for _, p in ipairs(self.players) do

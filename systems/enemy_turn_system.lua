@@ -196,6 +196,12 @@ function EnemyTurnSystem.update(dt, world)
             else
                 bestAttackPosKey = findBestAttackPosition(actingEnemy, targetPlayer, patternFunc, reachableTiles, world)
             end
+        elseif attackData.targeting_style == "auto_hit_all" then
+            -- For auto-hit attacks, just check if any valid targets exist from the current spot.
+            local currentTargets = WorldQueries.findValidTargetsForAttack(actingEnemy, attackName, world)
+            if #currentTargets > 0 then
+                canAttackNow = true
+            end
         end
 
         -- 3. Execute the chosen action.

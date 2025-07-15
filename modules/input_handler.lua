@@ -214,6 +214,7 @@ local function handle_action_menu_input(key, world)
             world.selectedAttackName = attackName
             menu.active = false
 
+            print("Selected attack:", attackName)
             if attackData.targeting_style == "cycle_target" then
                 local validTargets = WorldQueries.findValidTargetsForAttack(unit, attackName, world)
                 -- The menu logic should prevent this, but as a failsafe:
@@ -268,9 +269,9 @@ local function handle_action_menu_input(key, world)
                     end
                 end
             -- Directional and no-target attacks execute immediately without further aiming.
-            elseif attackData.targeting_style == "no_target" or attackData.targeting_style == "directional_aim" then
+            elseif attackData.targeting_style == "no_target" or attackData.targeting_style == "directional_aim" or attackData.targeting_style == "auto_hit_all" then
                 AttackHandler.execute(unit, attackName, world)
-                unit.hasActed = true
+                print("AttackHandler.execute called for", attackName)
                 world.playerTurnState = "free_roam"
                 world.selectedAttackName = nil
                 if allPlayersHaveActed(world) then
@@ -280,6 +281,7 @@ local function handle_action_menu_input(key, world)
                     world.mapCursorTile.x = unit.tileX
                     world.mapCursorTile.y = unit.tileY
                 end
+            print("Exiting attack execution, playerTurnState:", world.playerTurnState)
             end
         end
     end
@@ -434,6 +436,20 @@ local function handle_cycle_targeting_input(key, world)
         end
     end
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 --------------------------------------------------------------------------------

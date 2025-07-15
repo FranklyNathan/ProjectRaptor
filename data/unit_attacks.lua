@@ -157,19 +157,10 @@ UnitAttacks.eruption = function(attacker, power, world)
     return true
 end
 
-UnitAttacks.shockwave = function(attacker, power, world)
-    local attackData = AttackBlueprints.shockwave -- Get attack data for range
-    local range = attackData.range
-    
-    -- Apply paralyzed effect to all units within range
-    for _, entity in ipairs(world.all_entities) do
-        local distance = math.abs(attacker.tileX - entity.tileX) + math.abs(attacker.tileY - entity.tileY)
-        if distance <= range and entity.hp > 0 then -- Check if unit is within range and alive
-            -- Apply the "paralyzed" status effect to the target with a duration of 2 turns.
-            CombatActions.applyStatusEffect(entity, {type = "paralyzed", duration = 2, attacker = attacker}, world)
-        end
-    end
-    return true -- Attack succeeds, turn is consumed.
+UnitAttacks.shockwave = function(attacker, power, world)    
+    -- The targeting and effect application is handled in the CombatActions module.
+    -- This function simply returns true to indicate the attack was triggered.
+    return CombatActions.executeShockwave(attacker, AttackBlueprints.shockwave, world)
 end
 
 UnitAttacks.uppercut = function(attacker, power, world)

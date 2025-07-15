@@ -285,7 +285,7 @@ local function draw_world_space_ui(world)
     if world.gameState == "gameplay" and world.turn == "player" then
         -- 1. Draw the full attack range for the selected unit (the "danger zone").
         -- This is drawn first so that the blue movement range tiles can draw over it.
-        if world.playerTurnState == "unit_selected" and world.attackableTiles then
+        if (world.playerTurnState == "unit_selected" or world.playerTurnState == "ground_aiming") and world.attackableTiles then
             love.graphics.setColor(1, 0.2, 0.2, 0.3) -- Faint, transparent red
             for posKey, _ in pairs(world.attackableTiles) do
                 local tileX = tonumber(string.match(posKey, "(-?%d+)"))
@@ -441,6 +441,20 @@ local function draw_world_space_ui(world)
                             local pixelX, pixelY = Grid.toPixels(nextX, nextY)
                             love.graphics.rectangle("fill", pixelX + BORDER_WIDTH, pixelY + BORDER_WIDTH, INSET_SIZE, INSET_SIZE)
                             currentTileX, currentTileY = nextX, nextY
+                        end
+                    elseif world.selectedAttackName == "shockwave" then
+                        -- For shockwave, highlight the AoE around the attacker, not the target.
+                        love.graphics.setColor(1, 0.2, 0.2, 0.3) -- Semi-transparent red
+                        if attacker and attackData.range then
+                            for dx = -attackData.range, attackData.range do
+                                for dy = -attackData.range, attackData.range do
+                                    if math.abs(dx) + math.abs(dy) <= attackData.range then
+                                        local tileX, tileY = attacker.tileX + dx, attacker.tileY + dy
+                                        local pixelX, pixelY = Grid.toPixels(tileX, tileY)
+                                        love.graphics.rectangle("fill", pixelX + BORDER_WIDTH, pixelY + BORDER_WIDTH, INSET_SIZE, INSET_SIZE)
+                                    end
+                                end
+                            end
                         end
                     end
                 end

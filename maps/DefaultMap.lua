@@ -584,32 +584,6 @@ return {
           properties = {}
         },
         {
-          id = 36,
-          name = "punter",
-          type = "",
-          shape = "rectangle",
-          x = 320,
-          y = 128,
-          width = 32,
-          height = 32,
-          rotation = 0,
-          visible = true,
-          properties = {}
-        },
-        {
-          id = 42,
-          name = "punter",
-          type = "",
-          shape = "rectangle",
-          x = 320,
-          y = 128,
-          width = 32,
-          height = 32,
-          rotation = 0,
-          visible = true,
-          properties = {}
-        },
-        {
           id = 43,
           name = "punter",
           type = "",

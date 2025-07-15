@@ -39,7 +39,7 @@ local function process_turn_end_for_team(entities)
                 local damage = Config.POISON_DAMAGE_PER_TURN
                 local roundedDamage = math.floor(damage)
                 if roundedDamage > 0 then
-                    entity.hp = entity.hp - roundedDamage
+                    CombatActions.applyDirectDamage(entity, roundedDamage, false, nil)
                     if entity.hp < 0 then entity.hp = 0 end
                     -- Create a custom purple damage popup for poison
                     EffectFactory.createDamagePopup(entity, roundedDamage, false, {0.5, 0, 0.5, 1})
