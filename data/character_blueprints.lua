@@ -92,7 +92,7 @@ local CharacterBlueprints = {
         dominantColor = {0.1, 0.8, 0.3}, -- Sceptile: Leaf Green
         passives = {},
         attacks = {
-        "slash", "sylvan_spire", "hookshot"
+        "slash", "grovecall", "hookshot"
         }
     },
     pidgeotsquare = {

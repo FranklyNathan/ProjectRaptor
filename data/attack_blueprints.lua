@@ -17,6 +17,8 @@ local AttackBlueprints = {
     venom_stab = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
     uppercut = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
     slash = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
+    shunt = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
+    shockstrike = {power = 20, type = "damage", targeting_style = "cycle_target", range = 1},
 
     -- Damaging Ranged Attacks
     fireball = {power = 20, type = "damage", targeting_style = "cycle_target", range = 99, affects = "enemies", line_of_sight_only = true},
@@ -28,15 +30,16 @@ local AttackBlueprints = {
 
     -- Support Attacks
     invigorating_aura = {power = 0, type = "support", targeting_style = "cycle_target", range = 1, affects = "allies"},
+    mend = {power = 0, type = "support", targeting_style = "cycle_target", range = 1, affects = "allies"},
 
     -- Status Attacks
-    shockwave = {power = 0, type = "utility", targeting_style = "auto_hit_all"},
+    shockwave = {power = 0, type = "utility", targeting_style = "no_target", range = 14, affects = "all"},
 
     -- Movement Attacks
     quick_step = {power = 0, type = "utility", targeting_style = "ground_aim", range = 3, line_of_sight_only = true},
 
     -- Environment Attacks
-    sylvan_spire = {power = 0, type = "utility", targeting_style = "ground_aim", range = 6},
+    grovecall = {power = 0, type = "utility", targeting_style = "ground_aim", range = 6},
 
     -- Shared Attacks
     hookshot = {power = 30, type = "damage", targeting_style = "cycle_target", range = 7, affects = "all", line_of_sight_only = true},

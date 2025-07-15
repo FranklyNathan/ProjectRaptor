@@ -49,11 +49,12 @@ function Pathfinding.calculateReachableTiles(startUnit, world)
                         local canLand = false
 
                         if isObstacle then
-                            canPass = startUnit.isFlying
-                            canLand = false
+                            canPass = startUnit.isFlying -- Can only pass over obstacles if flying.
+                            canLand = false -- Cannot land on obstacles.
                         elseif occupyingUnit then
-                            canPass = startUnit.isFlying or (occupyingUnit.type == startUnit.type)
-                            canLand = false
+                            -- Players can pass through other players. Enemies cannot pass through anyone.
+                            canPass = startUnit.isFlying or (startUnit.type == "player" and occupyingUnit.type == "player")
+                            canLand = false -- Cannot land on occupied tiles.
                         else -- Tile is empty
                             canPass = true
                             canLand = true

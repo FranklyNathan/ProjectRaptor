@@ -76,6 +76,27 @@ function WorldQueries.isTargetInPattern(attacker, patternFunc, targets, world)
     return false -- No targets were found within the entire pattern
 end
 
+-- Helper to get a list of potential targets based on an attack's 'affects' property.
+local function getPotentialTargets(attacker, attackData, world)
+    local potentialTargets = {}
+    -- Default to affecting allies for support, enemies for damage.
+    local affects = attackData.affects or (attackData.type == "support" and "allies" or "enemies")
+
+    -- Correctly determine the target list based on the attacker's perspective.
+    local targetEnemies = (attacker.type == "player") and world.enemies or world.players
+    local targetAllies = (attacker.type == "player") and world.players or world.enemies
+
+    if affects == "enemies" then
+        for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
+    elseif affects == "allies" then
+        for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
+    elseif affects == "all" then
+        for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
+        for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
+    end
+    return potentialTargets
+end
+
 -- Finds all valid targets for a given attack, based on its blueprint properties.
 function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
     local attackData = AttackBlueprints[attackName]
@@ -85,23 +106,7 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
     local style = attackData.targeting_style
 
     if style == "cycle_target" then
-        -- Determine who to target (enemies, allies, etc.)
-        local potentialTargets = {}
-        local affects = attackData.affects or (attackData.type == "support" and "allies" or "enemies")
-
-        -- Correctly determine the target list based on the attacker's perspective.
-        -- An "enemy" to a player is an AI unit, and an "enemy" to an AI unit is a player.
-        local targetEnemies = (attacker.type == "player") and world.enemies or world.players
-        local targetAllies = (attacker.type == "player") and world.players or world.enemies
-
-        if affects == "enemies" then
-            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
-        elseif affects == "allies" then
-            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
-        elseif affects == "all" then
-            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
-            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
-        end
+        local potentialTargets = getPotentialTargets(attacker, attackData, world)
 
         -- Special case for hookshot: also allow targeting any obstacle.
         if attackName == "hookshot" then
@@ -181,19 +186,7 @@ function WorldQueries.findValidTargetsForAttack(attacker, attackName, world)
         local patternFunc = AttackPatterns[attackName]
         if not patternFunc then return {} end
 
-        -- Determine who to target
-        local isHeal = attackData.type == "support"
-        local potentialTargets = {}
-        local affects = attackData.affects or (isHeal and "allies" or "enemies")
-        local targetEnemies = (attacker.type == "player") and world.enemies or world.players
-        local targetAllies = (attacker.type == "player") and world.players or world.enemies
-
-        if affects == "enemies" then for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
-        elseif affects == "allies" then for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
-        elseif affects == "all" then
-            for _, unit in ipairs(targetEnemies) do table.insert(potentialTargets, unit) end
-            for _, unit in ipairs(targetAllies) do table.insert(potentialTargets, unit) end
-        end
+        local potentialTargets = getPotentialTargets(attacker, attackData, world)
 
         -- Check all 4 directions from the attacker's current position
         local tempAttacker = { tileX = attacker.tileX, tileY = attacker.tileY, x = attacker.x, y = attacker.y, size = attacker.size }

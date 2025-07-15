@@ -31,21 +31,27 @@ local function executePatternAttack(square, power, patternFunc, isHeal, targetTy
     end
 end
 
--- Helper for cycle_target attacks that deal damage.
-local function executeCycleTargetDamageAttack(attacker, power, world, statusEffect)
-    -- 1. Get the selected target from the cycle targeting system.
+-- Helper to get the currently selected target and make the attacker face them.
+local function get_and_face_cycle_target(attacker, world)
     if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe, should not happen if called correctly.
+        return nil -- Failsafe, should not happen if called correctly.
     end
     local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
 
-    -- 2. Make the attacker face the target before striking.
+    -- Make the attacker face the target.
     local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
     if math.abs(dx) > math.abs(dy) then
         attacker.lastDirection = (dx > 0) and "right" or "left"
     else
         attacker.lastDirection = (dy > 0) and "down" or "up"
     end
+    return target
+end
+
+-- Helper for cycle_target attacks that deal damage.
+local function executeCycleTargetDamageAttack(attacker, power, world, statusEffect)
+    local target = get_and_face_cycle_target(attacker, world)
+    if not target then return false end
 
     -- Determine the correct target type based on the attacker's team.
     local targetType = (attacker.type == "player") and "enemy" or "player"
@@ -55,58 +61,28 @@ local function executeCycleTargetDamageAttack(attacker, power, world, statusEffe
     return true
 end
 
+-- Helper for cycle_target attacks that fire a projectile.
+local function executeCycleTargetProjectileAttack(attacker, power, world, isPiercing)
+    local target = get_and_face_cycle_target(attacker, world)
+    if not target then return false end
+
+    -- Fire a projectile in that direction.
+    local isEnemy = (attacker.type == "enemy")
+    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil, isPiercing)
+    world:queue_add_entity(newProjectile)
+    return true
+end
+
 UnitAttacks.slash = function(attacker, power, world)
-    -- This is the new model for a cycle_target attack.
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe, should not happen if called correctly.
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
     return executeCycleTargetDamageAttack(attacker, power, world, nil)
 end
 
 UnitAttacks.longshot = function(attacker, power, world)
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
-
-    -- 3. Fire a projectile in that direction.
-    local isEnemy = (attacker.type == "enemy")
-    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil)
-    world:queue_add_entity(newProjectile)
-    return true
+    return executeCycleTargetProjectileAttack(attacker, power, world, false)
 end
 
 UnitAttacks.fireball = function(attacker, power, world)
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
-
-    -- 3. Fire a piercing projectile in that direction.
-    local isEnemy = (attacker.type == "enemy")
-    local newProjectile = EntityFactory.createProjectile(attacker.x, attacker.y, attacker.lastDirection, attacker, power, isEnemy, nil, true) -- piercing = true
-    world:queue_add_entity(newProjectile)
-    return true
+    return executeCycleTargetProjectileAttack(attacker, power, world, true)
 end
 
 UnitAttacks.venom_stab = function(attacker, power, world)
@@ -147,20 +123,8 @@ UnitAttacks.phantom_step = function(square, power, world)
 end
 
 UnitAttacks.invigorating_aura = function(attacker, power, world)
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
-
+    local target = get_and_face_cycle_target(attacker, world)
+    if not target then return false end
     -- 3. If the friendly target has already acted, refresh their turn.
     if target.hasActed then
         target.hasActed = false
@@ -193,23 +157,19 @@ UnitAttacks.eruption = function(attacker, power, world)
     return true
 end
 
-UnitAttacks.shockwave = function(square, power, world)
-    for _, enemy in ipairs(world.enemies) do
-        if enemy.hp > 0 then
-            -- Create a 0-power attack effect on each enemy that carries the "paralyzed" status.
-            EffectFactory.addAttackEffect(
-                enemy.x, enemy.y, enemy.size, enemy.size,
-                {1, 1, 0, 0.7}, -- Venusaur visual effect
-                0, -- delay
-                square, -- attacker
-                0, -- power
-                false, -- isHeal
-                "enemy", -- targetType
-                nil, -- critChanceOverride
-                {type = "paralyzed", duration = 2} -- statusEffect, lasts 2 turns
-            )
+UnitAttacks.shockwave = function(attacker, power, world)
+    local attackData = AttackBlueprints.shockwave -- Get attack data for range
+    local range = attackData.range
+    
+    -- Apply paralyzed effect to all units within range
+    for _, entity in ipairs(world.all_entities) do
+        local distance = math.abs(attacker.tileX - entity.tileX) + math.abs(attacker.tileY - entity.tileY)
+        if distance <= range and entity.hp > 0 then -- Check if unit is within range and alive
+            -- Apply the "paralyzed" status effect to the target with a duration of 2 turns.
+            CombatActions.applyStatusEffect(entity, {type = "paralyzed", duration = 2, attacker = attacker}, world)
         end
     end
+    return true -- Attack succeeds, turn is consumed.
 end
 
 UnitAttacks.uppercut = function(attacker, power, world)
@@ -271,7 +231,7 @@ UnitAttacks.quick_step = function(attacker, power, world)
     return true -- Consume the turn.
 end
 
-UnitAttacks.sylvan_spire = function(square, power, world)
+UnitAttacks.grovecall = function(square, power, world)
     -- This is the new model for a ground_aim attack.
     -- 1. Get the target tile from the ground aiming cursor.
     local targetTileX, targetTileY = world.mapCursorTile.x, world.mapCursorTile.y
@@ -305,20 +265,8 @@ UnitAttacks.sylvan_spire = function(square, power, world)
 end
 
 UnitAttacks.hookshot = function(attacker, power, world)
-    -- This is the new model for a cycle_target hookshot.
-    -- 1. Get the selected target from the cycle targeting system.
-    if not world.cycleTargeting.active or not world.cycleTargeting.targets[world.cycleTargeting.selectedIndex] then
-        return false -- Failsafe, should not happen if called correctly.
-    end
-    local target = world.cycleTargeting.targets[world.cycleTargeting.selectedIndex]
-
-    -- 2. Make the attacker face the target before firing.
-    local dx, dy = target.tileX - attacker.tileX, target.tileY - attacker.tileY
-    if math.abs(dx) > math.abs(dy) then
-        attacker.lastDirection = (dx > 0) and "right" or "left"
-    else
-        attacker.lastDirection = (dy > 0) and "down" or "up"
-    end
+    local target = get_and_face_cycle_target(attacker, world)
+    if not target then return false end
 
     -- 3. Get the blueprint data to find the range and fire the hook.
     local attackData = AttackBlueprints.hookshot

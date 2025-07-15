@@ -79,7 +79,7 @@ end
 local function get_ground_aim_aoe_preview(attackName, cursorTileX, cursorTileY)
     local pixelX, pixelY = Grid.toPixels(cursorTileX, cursorTileY)
 
-    if attackName == "sylvan_spire" then
+    if attackName == "grovecall" then
         -- A simple 1x1 tile preview.
         return {{shape = {type = "rect", x = pixelX, y = pixelY, w = Config.SQUARE_SIZE, h = Config.SQUARE_SIZE}, delay = 0}}
     elseif attackName == "eruption" then

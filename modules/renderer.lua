@@ -375,9 +375,14 @@ local function draw_world_space_ui(world)
             if #cycle.targets > 0 then
                 local target = cycle.targets[cycle.selectedIndex]
                 local attacker = world.actionMenu.unit
+                local attackData = world.selectedAttackName and AttackBlueprints[world.selectedAttackName]
 
-                if target and attacker then
-                    if world.selectedAttackName == "phantom_step" then
+                if target and attacker and attackData then
+                    if attackData.type == "support" then
+                        -- Draw a green overlay on the targeted ally.
+                        love.graphics.setColor(0.2, 1, 0.2, 0.3) -- Semi-transparent green.
+                        love.graphics.rectangle("fill", target.x + BORDER_WIDTH, target.y + BORDER_WIDTH, INSET_SIZE, INSET_SIZE)
+                    elseif world.selectedAttackName == "phantom_step" then
                         -- For phantom_step, shade the target red and the warp destination blue.
                         local dx, dy = 0, 0
                         if target.lastDirection == "up" then dy = 1
